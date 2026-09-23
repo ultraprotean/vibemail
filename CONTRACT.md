@@ -16,9 +16,9 @@ The project is complete when all of the following hold:
 
 ## 2. Conventions
 
-- Base path: all endpoints below are relative to the deployed API root.
+- Base path: `/api/v1`, except the Pub/Sub webhook, which lives at `/webhook/gmail` outside `/api/v1`.
 - Content type: `application/json` for all request/response bodies except the OAuth callback and Pub/Sub webhook.
-- Session: a JWT is set as an httpOnly, Secure, SameSite=Lax cookie named `session` after successful OAuth. It expires after 1 hour; the server silently mints a replacement using the stored (encrypted) Gmail refresh token as long as that refresh token is still valid.
+- Session: after successful OAuth, the client receives a JWT and must send it as an `Authorization: Bearer <jwt>` header on every authenticated request. It expires after 1 hour; once expired, requests fail with `AUTH_FAILED` (`recoverable: true`) and the client re-runs the OAuth flow to obtain a fresh token.
 - Error envelope (all endpoints):
   ```json
   { "error": { "code": "STRING_CODE", "message": "human-readable", "details": { "...": "optional, error-specific" } } }
@@ -33,7 +33,7 @@ Every endpoint that requires a valid session uses one error code for all authent
 { "error": { "code": "AUTH_FAILED", "message": "...", "details": { "recoverable": true } } }
 ```
 
-- `recoverable: true` — the client can resolve this by re-running the normal flow (e.g. session cookie missing/expired and silent refresh failed only because the user was logged out; redirect to `/auth/google`).
+- `recoverable: true` — the client can resolve this by re-running the normal flow (e.g. `Authorization` header missing/expired; redirect to `/auth/google` to obtain a fresh token).
 - `recoverable: false` — the stored Gmail refresh token itself is invalid/revoked; no amount of retrying will help — the user must complete the full OAuth consent screen again.
 
 ## 4. Data Model — Stored Message
@@ -95,7 +95,7 @@ OAuth redirect target from Google.
 | `state` | string | CSRF token, must match the one issued when starting the flow |
 | `error` | string, optional | present if the user denied consent |
 
-**Success response:** `302 Found`, `Location: <FRONTEND_URL>/inbox`, `Set-Cookie: session=<jwt>; HttpOnly; Secure; SameSite=Lax`.
+**Success response:** `302 Found`, `Location: <FRONTEND_URL>/inbox#token=<jwt>` — the JWT is delivered in the URL fragment (never sent to the server or logged) for the client to read and store; the client attaches it as `Authorization: Bearer <jwt>` on all subsequent requests.
 Side effects: exchanges `code` for access/refresh tokens, fetches the account email, encrypts and upserts the singleton `account` row, registers a Gmail `users.watch()` for Pub/Sub, triggers the initial 50-message backfill sync.
 
 **Errors:**
@@ -106,7 +106,7 @@ Side effects: exchanges `code` for access/refresh tokens, fetches the account em
 
 ### 6.2 `GET /messages`
 
-**Request** — requires `session` cookie. Query params:
+**Request** — requires `Authorization: Bearer <jwt>` header. Query params:
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `cursor` | string, optional | none | opaque pagination cursor from a prior response's `nextCursor` |
@@ -132,13 +132,13 @@ Sorted `receivedAt` descending (newest first).
 **Errors:**
 | Status | Code | Notes |
 |---|---|---|
-| 401 | `AUTH_FAILED` (`recoverable` per §3) | missing/expired session, refresh attempted first |
+| 401 | `AUTH_FAILED` (`recoverable` per §3) | missing/expired/invalid `Authorization` header |
 | 400 | `INVALID_REQUEST` | invalid `limit`/`cursor` |
 | 500 | `INTERNAL_ERROR` | unexpected failure |
 
 ### 6.3 `POST /messages/send`
 
-**Request** — requires `session` cookie. Body:
+**Request** — requires `Authorization: Bearer <jwt>` header. Body:
 ```json
 {
   "to": ["string", "..."],
@@ -169,7 +169,7 @@ Sorted `receivedAt` descending (newest first).
 
 ### 6.4 `PATCH /messages/:id/read`
 
-**Request** — requires `session` cookie. Path param `id` (Gmail message id). No body.
+**Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). No body.
 Behavior: calls Gmail `messages.modify` to remove the `UNREAD` label first; only on success updates the local `messages` row's `isRead`.
 
 **Success response:** `200 OK`
@@ -185,7 +185,7 @@ Behavior: calls Gmail `messages.modify` to remove the `UNREAD` label first; only
 | 502 | `PROVIDER_ERROR` | Gmail's `messages.modify` call failed — local row is NOT updated |
 | 500 | `INTERNAL_ERROR` | unexpected failure |
 
-### 6.5 `POST /webhooks/gmail?token=<shared-secret>`
+### 6.5 `POST /webhook/gmail?token=<shared-secret>`
 
 Gmail Pub/Sub push subscription target. Not session-authenticated; verified by matching the `token` query param against an env-configured secret.
 

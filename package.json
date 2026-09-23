@@ -2,7 +2,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.117.0",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^26.6.2",
+    "@types/node": "^24.13.6",
     "googleapis": "^181.0.0",
     "jsonwebtoken": "^9.0.3",
     "ts-node": "^10.9.2",
@@ -20,6 +20,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": "24.x"
+  },
   "directories": {
     "doc": "docs",
     "test": "tests"
