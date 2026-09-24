@@ -18,6 +18,17 @@ import type {
 
 const TABLE = 'users';
 
+/**
+ * A first-time user arrived with no refresh token, so there is nothing to store (the
+ * column is NOT NULL). Forced consent (§6.1) normally prevents this; signing in again fixes it.
+ */
+export class MissingRefreshTokenError extends Error {
+  constructor(readonly googleId: string) {
+    super('Google issued no refresh token for a new user; sign in again');
+    this.name = 'MissingRefreshTokenError';
+  }
+}
+
 /** PostgREST exchanges `bytea` as a `\x`-prefixed hex string. */
 export function toByteaHex(buf: Buffer): string {
   return `\\x${buf.toString('hex')}`;
@@ -67,23 +78,26 @@ export class SupabaseUserStore implements UserStore {
   }
 
   async upsertUserTokens(input: UpsertUserInput): Promise<{ userId: string }> {
-    const { data, error } = await this.client
-      .from(TABLE)
-      .upsert(
-        {
-          google_id: input.googleId,
-          email: input.email,
-          ...tokenColumns(input),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'google_id' },
-      )
-      .select('id')
-      .single();
+    const columns = {
+      google_id: input.googleId,
+      email: input.email,
+      ...tokenColumns(input),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Without a refresh token this can only update an existing user. An upsert that omits
+    // refresh_token_enc fails even when the row exists: Postgres checks NOT NULL on the
+    // INSERT half of INSERT ... ON CONFLICT before it resolves the conflict.
+    const { data, error } = input.refreshTokenEnc
+      ? await this.client.from(TABLE).upsert(columns, { onConflict: 'google_id' }).select('id').single()
+      : await this.client.from(TABLE).update(columns).eq('google_id', input.googleId).select('id').maybeSingle();
     if (error) {
       throw new Error(`Failed to upsert user: ${error.message}`);
     }
     const row: unknown = data;
+    if (row === null && !input.refreshTokenEnc) {
+      throw new MissingRefreshTokenError(input.googleId);
+    }
     if (!isRecord(row)) {
       throw new Error('Upsert returned no row');
     }

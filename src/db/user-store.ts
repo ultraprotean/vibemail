@@ -50,8 +50,10 @@ export interface WatchDueUser {
 
 export interface UserStore {
   /**
-   * Insert or update the user on conflict `google_id` (§6.2 step 2).
+   * Insert or update the user on conflict `google_id` (§6.2 step 2). Without
+   * `refreshTokenEnc` only an existing user can be updated (the stored token is kept).
    * @returns our `users.id`, used as the JWT `sub`.
+   * @throws if `refreshTokenEnc` is absent and the user doesn't exist yet.
    */
   upsertUserTokens(input: UpsertUserInput): Promise<{ userId: string }>;
 

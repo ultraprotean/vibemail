@@ -24,6 +24,9 @@ export class MemoryUserStore implements UserStore {
 
   async upsertUserTokens(input: UpsertUserInput): Promise<{ userId: string }> {
     const existing = this.rows.get(input.googleId);
+    if (!existing && !input.refreshTokenEnc) {
+      throw new Error('Google issued no refresh token for a new user; sign in again');
+    }
     const row: MemoryUserRow = {
       userId: existing?.userId ?? `user-${this.nextId++}`,
       googleId: input.googleId,

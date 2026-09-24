@@ -160,7 +160,7 @@ Side effects, in order:
 **Errors:**
 | Status | Code | recoverable | When |
 |---|---|---|---|
-| 400 | `AUTH_FAILED` | `true` | missing `code`, missing or mismatched `state`, any `error` param from Google, `invalid_grant` on code exchange (code expired or already used), or `gmail.modify` not granted — the user can retry the flow |
+| 400 | `AUTH_FAILED` | `true` | missing `code`, missing or mismatched `state`, any `error` param from Google, `invalid_grant` on code exchange (code expired or already used), `gmail.modify` not granted, or a first-time user for whom Google issued no refresh token — the user can retry the flow |
 | 502 | `AUTH_FAILED` | `false` | Google's token endpoint returned any other error (outage, misconfigured client) |
 | 502 | `PROVIDER_ERROR` | — | tokens were saved but `watch()` or the backfill failed; retrying the flow repeats both safely |
 

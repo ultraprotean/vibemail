@@ -1,5 +1,6 @@
 import { SessionError } from '../auth/jwt';
 import { TokenDecryptionError } from '../crypto/tokens';
+import { MissingRefreshTokenError } from '../db/supabase-user-store';
 import { PostConsentSetupError } from '../providers/gmail/auth';
 import { MessageNotFoundError } from '../read-state';
 import { SendValidationError } from '../send/mime';
@@ -63,6 +64,7 @@ export class InvalidRequestError extends Error {
  */
 export function toErrorResponse(err: unknown, headers: Headers = {}): Response {
   if (err instanceof SessionError) return authFailed(401, err.message, true, headers);
+  if (err instanceof MissingRefreshTokenError) return authFailed(400, err.message, true, headers);
   if (err instanceof InvalidRequestError || err instanceof SendValidationError) {
     return errorResponse(400, 'INVALID_REQUEST', err.message, undefined, headers);
   }
