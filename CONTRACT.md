@@ -87,7 +87,7 @@ One row per connected Google account. Re-consent by the same account updates its
 | Field | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK, default `gen_random_uuid()` | our user id; the JWT `sub` (§2) |
-| `google_id` | `text`, unique, not null | ID token `sub` claim: Google's stable account id (an email address can change, this can't). **Pending in the schema branch migration.** |
+| `google_id` | `text`, unique, not null | ID token `sub` claim: Google's stable account id (an email address can change, this can't). |
 | `email` | `text`, unique, not null | ID token `email` claim at OAuth time; used to route webhook notifications (§6.6) |
 | `access_token_enc` | `bytea`, not null | encrypted, see "Token encryption" below |
 | `refresh_token_enc` | `bytea`, not null | encrypted; follows the §3 merge rule (never overwritten with null). Always present because §6.1 forces consent. |
@@ -97,6 +97,10 @@ One row per connected Google account. Re-consent by the same account updates its
 | `created_at` / `updated_at` | `timestamptz` | |
 
 Gmail's `watch()` response has no resource or channel id (unlike Drive and Calendar watch channels), so there is nothing else to store for a watch.
+
+### Access control
+
+The server connects to Supabase only with the service role key, which bypasses row level security; per-user scoping is enforced in application code (every query filters by `user_id`). RLS is still enabled on `users` and `messages` as defense in depth: `anon` (the public key) has no access at all, and `authenticated` can only reach rows where `id`/`user_id` equals `auth.uid()`.
 
 ### Token encryption
 
@@ -227,7 +231,7 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 ### 6.5 `PATCH /messages/:id/read`
 
 **Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). No body.
-Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label; only on success updates the local `messages` row's `isRead`.
+Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label; only on success removes `UNREAD` from the local row's `label_ids` (`is_read` is generated from it, §4).
 
 **Success response:** `200 OK`
 ```json

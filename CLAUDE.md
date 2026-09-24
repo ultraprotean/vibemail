@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1 (provider interface, `src/types/provider.ts`) and 2 (Gmail OAuth, `src/providers/gmail/auth.ts`, token encryption in `src/crypto/`, user store in `src/db/`) are done; unit 3 (message normalization in `src/providers/gmail/messages.ts`, initial sync in `src/sync/`, message store in `src/db/`) is in progress. No `api/` entry points exist yet. Column names follow the schema branch migration (`supabase/migrations/` on `origin/schema`).
+Build progress: units 1 (provider interface, `src/types/provider.ts`) and 2 (Gmail OAuth, `src/providers/gmail/auth.ts`, token encryption in `src/crypto/`, user store in `src/db/`) are done; unit 3 (message normalization in `src/providers/gmail/messages.ts`, initial sync in `src/sync/`, message store in `src/db/`) is in progress. No `api/` entry points exist yet. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
 
 ## Stack
 
@@ -29,7 +29,7 @@ Read these before writing any code — they are the spec, not background reading
 ## The two-session architecture
 
 - **Server logic session** — works on `main`, owns `src/` and `api/`.
-- **Schema session** — works on a `schema` branch, owns `migrations/` and `types/`.
+- **Schema session** — works on a `schema` branch, owns `supabase/migrations/`, `supabase/tests/`, and `types/`.
 - Each session stays inside its own owned directories; see Never-do rules below for the specific boundary (schema session must not write to `src/db/`).
 
 ## Sequencing rule (critical — see CONTRACT.md §5)
