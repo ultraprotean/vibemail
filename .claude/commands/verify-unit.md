@@ -44,7 +44,7 @@ No changed files at all counts as a PASS.
 
 <!-- Update these paths once unit 1 settles the real directory layout. -->
 
-- **Always allowed:** `CONTRACT.md`, `CLAUDE.md`, `BUILD_SEQUENCE.md` (spec amendments), `package.json`, `package-lock.json`, `tsconfig.json`, `tsconfig.*.json`, `jest.config.*`, `.env.example`, `.claude/commands/**`, `src/shared/**` (shared error envelope and types)
+- **Always allowed:** `CONTRACT.md`, `CLAUDE.md`, `BUILD_SEQUENCE.md` (spec amendments), `package.json`, `package-lock.json`, `tsconfig.json`, `tsconfig.*.json`, `jest.config.*`, `.env.example`, `.claude/commands/**`, `docs/**` (API collection and guides), `src/shared/**` (shared error envelope and types)
 - **Unit 1: provider abstraction interface.** `src/types/**` (provider interface), `src/providers/*` (interface files, not `src/providers/gmail/`), `src/db/**` (persistence interface)
 - **Unit 2: Gmail OAuth and token persistence.** `src/providers/gmail/**`, `src/db/**` (user store interface + Supabase impl), `src/types/**` (interface amendments), `src/auth/**` (JWT), `src/crypto/**` (token encrypt/decrypt), `tests/**`
 - **Unit 3: sync and read layer.** `src/providers/gmail/**`, `src/db/**` (message store), `src/types/**` (interface amendments), `src/sync/**`, `tests/**`
