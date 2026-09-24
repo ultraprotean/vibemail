@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1–5 are done (provider interface `src/types/provider.ts`; Gmail provider in `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; watch renewal cron `src/cron/renewWatch.ts`, scheduled in `vercel.json`; send `src/send/`; read state `src/read-state/`). Unit 6 (Vercel entry points in `api/`, thin wrappers over the Web-standard handlers in `src/http/handlers.ts`, with JWT in `src/auth/jwt.ts` and env config in `src/config.ts`) is in progress. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
+Build progress: units 1–6 are built (provider interface `src/types/provider.ts`; Gmail provider `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; watch renewal cron `src/cron/renewWatch.ts`; send `src/send/`; read state `src/read-state/`; Vercel entry points `api/` over `src/http/handlers.ts`). Unit 6's local-preview check (`npx vercel dev` + a real Google sign-in) hasn't been run yet. Unit 7's integration suite (`tests/integration/`) runs against the live Supabase dev database. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
 
 ## Stack
 
@@ -74,8 +74,13 @@ These map to the BUILD_SEQUENCE.md verification checks (`/verify-unit <N>` runs 
 # Type-check (unit 1 gate: "TypeScript compiles clean")
 npx tsc --noEmit
 
-# Run the Jest suite (units 2-5, 7 gates). Tests compile with tsconfig.test.json via ts-jest.
+# Run the full Jest suite (units 2-5, 7 gates). Tests compile with tsconfig.test.json via ts-jest.
+# Includes tests/integration/, which runs against LIVE Supabase (SUPABASE_URL and
+# SUPABASE_SERVICE_ROLE_KEY from .env). Gmail is faked; Supabase is never mocked. Each test
+# file namespaces its rows (google_id "it-<file>-<run>-…") and deletes them afterwards.
 npm test
+npm run test:unit                    # everything except tests/integration (no database needed)
+npm run test:integration             # only the live-Supabase suite
 npx jest path/to/file.test.ts        # single test file
 npx jest -t "test name"              # single test by name
 
