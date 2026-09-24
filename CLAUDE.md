@@ -56,8 +56,8 @@ Do not jump ahead of this ordering: build behind the persistence interface first
 - All errors use the CONTRACT.md error envelope shape: `{ "error": { "code", "message", "details" } }`.
 - Cursor-based pagination on all list endpoints.
 - `/api/v1` base path on all client-facing endpoints.
-- JWT Bearer token authentication on all endpoints except the OAuth callback.
-- The Pub/Sub webhook endpoint lives at `/webhook/gmail`, outside `/api/v1`.
+- JWT Bearer token authentication on all endpoints except the two OAuth endpoints (`/auth/google`, `/auth/google/callback`), the webhook and the cron.
+- The Pub/Sub webhook endpoint lives at `/webhook/gmail` and the watch-renewal cron at `/cron/renew-watch`, both outside `/api/v1`.
 
 ## Architecture
 
@@ -83,4 +83,4 @@ npx jest -t "test name"              # single test by name
 npx vercel dev
 ```
 
-Environment variables are listed (unset) in `.env.example`; copy to `.env` for local development. Required: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `ENCRYPTION_KEY`, `FRONTEND_URL`.
+Environment variables are listed (unset) in `.env.example`; copy to `.env` for local development. Required: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `CRON_SECRET`.
