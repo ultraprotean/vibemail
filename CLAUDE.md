@@ -23,13 +23,13 @@ The system is currently at the specification/skeleton stage: dependencies are in
 
 Read these before writing any code — they are the spec, not background reading:
 
-- **[CONTRACT.md](CONTRACT.md)** — the synchronization point between sessions. Defines the endpoint contracts (request/response shapes, typed error cases), the `account`/`messages` data model with each field's Gmail API source, the auth error semantics (`AUTH_FAILED` + `recoverable` flag), and the two-session sequencing rule.
+- **[CONTRACT.md](CONTRACT.md)** — the synchronization point between sessions. Defines the endpoint contracts (request/response shapes, typed error cases), the `users`/`messages` data model (plus support tables and the RLS access model) with each field's Gmail API source, the auth error semantics (`AUTH_FAILED` + `recoverable` flag), and the two-session sequencing rule.
 - **[BUILD_SEQUENCE.md](BUILD_SEQUENCE.md)** — the atomic build order (7 units). Each unit has exactly one verification check; do not start unit N+1 until unit N's check passes.
 
 ## The two-session architecture
 
 - **Server logic session** — works on `main`, owns `src/` and `api/`.
-- **Schema session** — works on a `schema` branch, owns `migrations/` and `types/`.
+- **Schema session** — works on a `schema` branch, owns `supabase/migrations/`, `supabase/tests/`, and `types/`.
 - Each session stays inside its own owned directories; see Never-do rules below for the specific boundary (schema session must not write to `src/db/`).
 
 ## Sequencing rule (critical — see CONTRACT.md §5)
@@ -37,7 +37,7 @@ Read these before writing any code — they are the spec, not background reading
 **Logic ships before schema merges.** The two sessions run in parallel, not back-to-back — only the schema *merge* is gated:
 
 - **Session 1 (server logic)** implements all endpoint handlers, the Gmail client wrapper, token encrypt/decrypt, JWT issue/verify, and Pub/Sub payload parsing, all behind a persistence *interface*. It is done when every success path and every typed error case in CONTRACT.md has a passing Jest test with zero skipped tests (`npm test` exits 0), run against a live Supabase instance (BUILD_SEQUENCE.md unit 7 — the verification gate).
-- **Session 2 (schema)** designs the Supabase `account`/`messages` tables and migration on the `schema` branch in parallel, and may apply it to a real database early so Session 1 has something live to test against — but the `schema` branch cannot be merged until Session 1's tests pass.
+- **Session 2 (schema)** designs the Supabase `users`/`messages` tables and migration on the `schema` branch in parallel, and may apply it to a real database early so Session 1 has something live to test against — but the `schema` branch cannot be merged until Session 1's tests pass.
 
 Do not jump ahead of this ordering: build behind the persistence interface first, and treat "the schema branch is merged" as a separate, later event from "the schema exists in a dev database."
 
@@ -45,7 +45,7 @@ Do not jump ahead of this ordering: build behind the persistence interface first
 
 - Never use `any` as a TypeScript type.
 - Never poll the Gmail API for new messages — use Pub/Sub push webhooks.
-- Never store OAuth tokens in plaintext — encrypt at rest (pgcrypto/pgsodium, per CONTRACT.md).
+- Never store OAuth tokens in plaintext — encrypt at rest app-side (AES-256-GCM with `ENCRYPTION_KEY`, per CONTRACT.md §4).
 - Never make Gmail API calls without going through the `googleapis` OAuth2 client — it handles token refresh automatically; don't hand-roll refresh logic.
 - Never write to `src/db/` from the schema session.
 - Never merge the schema session before `npm test` exits 0 on server logic.
@@ -61,8 +61,8 @@ Do not jump ahead of this ordering: build behind the persistence interface first
 
 ## Architecture
 
-- **Single-user system.** The `account` table is a singleton (always one row, fixed id). There is no multi-tenant user model — do not add a `user_id` column or per-user scoping.
-- **Push, not poll.** New messages and read-state changes arrive via the Pub/Sub webhook, which processes deltas from the stored `account.last_history_id` watermark using `history.list`. Webhook processing must be idempotent (Pub/Sub redelivers).
+- **Multi-user, RLS-isolated.** Each Gmail account is a `users` row; `messages` is keyed `(user_id, id)`. User-scoped endpoints query with the anon key plus a server-minted Supabase JWT (`sub = users.id`, `role = authenticated`) so RLS enforces isolation. Only the OAuth callback and the webhook use the service role key.
+- **Push, not poll.** New messages and read-state changes arrive via the Pub/Sub webhook, which processes deltas from the user's stored `users.last_history_id` watermark using `history.list`. Webhook processing must be idempotent (Pub/Sub redelivers).
 - **Two-tier auth failure.** Every authenticated endpoint reports auth problems as `AUTH_FAILED` with a `recoverable` boolean (CONTRACT.md §3) — `true` means the client can redirect to `/auth/google` and retry; `false` means the stored Gmail refresh token itself is dead and the user must redo full consent. Don't collapse these into a single generic 401.
 - **No attachments.** Both the `messages` data model and the send endpoint explicitly exclude attachment support — don't add attachment fields or params without a contract change.
 
@@ -83,4 +83,4 @@ npx jest -t "test name"              # single test by name
 npx vercel dev
 ```
 
-Environment variables are listed (unset) in `.env.example`; copy to `.env` for local development. Required: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `ENCRYPTION_KEY`, `FRONTEND_URL`.
+Environment variables are listed (unset) in `.env.example`; copy to `.env` for local development. Required: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `JWT_SECRET`, `ENCRYPTION_KEY`, `FRONTEND_URL`.
