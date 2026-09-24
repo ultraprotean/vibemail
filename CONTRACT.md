@@ -210,7 +210,7 @@ Returns only messages whose `user_id` is the JWT's `sub`. Sorted `receivedAt` de
   "inReplyTo": "string"
 }
 ```
-`to`, `subject`, and at least one of `bodyText`/`bodyHtml` are required; `cc`, `bcc`, `threadId`, `inReplyTo` are optional (the latter two support replying within an existing thread). No attachment support.
+`to`, `subject`, and at least one of `bodyText`/`bodyHtml` are required; `cc`, `bcc`, `threadId`, `inReplyTo` are optional (the latter two support replying within an existing thread). No attachment support. For convenience, `to` may also be a single address string, and `body` is accepted as a synonym for `bodyText`.
 
 The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw` (never via the `media` upload parameter). For Gmail to place a reply in the thread, `threadId` must be set, the `In-Reply-To` and `References` headers must carry `inReplyTo`, and the `Subject` must match the thread's subject.
 
@@ -218,6 +218,8 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 ```json
 { "id": "string", "threadId": "string", "status": "sent" }
 ```
+
+After a successful send, the sent copy is fetched back with `messages.get` (the send response carries only ids), normalized like any synced message, and upserted under the user. If that fetch or upsert fails, the response is still `201`: the message has been sent, and failing would invite a duplicate retry. The webhook stores the copy later, because sending adds it to the mailbox history.
 
 **Errors:**
 | Status | Code | Notes |
@@ -230,8 +232,8 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 
 ### 6.5 `PATCH /messages/:id/read`
 
-**Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). No body.
-Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label; only on success removes `UNREAD` from the local row's `label_ids` (`is_read` is generated from it, §4).
+**Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). Optional JSON body `{ "isRead": false }` marks the message **unread** instead; with no body (or `"isRead": true`) it is marked read.
+Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label (or add it, for unread); only on success replaces the local row's `label_ids` with the labels Gmail returns (`is_read` is generated from them, §4).
 
 **Success response:** `200 OK`
 ```json
