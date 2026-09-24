@@ -22,6 +22,7 @@ The project is complete when all of the following hold:
 - Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/cron/renew-watch`), which live outside `/api/v1`.
 - Authentication: JWT Bearer on every endpoint except `GET /auth/google`, `GET /auth/google/callback`, the webhook (shared-secret token, §6.6) and the cron (cron secret, §6.7).
 - Content type: `application/json` for all request/response bodies except the OAuth endpoints, the Pub/Sub webhook, and the cron.
+- CORS: the three JWT-authenticated routes (§6.3–6.5) answer `OPTIONS` preflights and send `Access-Control-Allow-Origin: <FRONTEND_URL>` (that origin only, allowing the `Authorization` and `Content-Type` headers). No cookies cross origins; the session is a Bearer token.
 - OAuth scopes requested: `https://www.googleapis.com/auth/gmail.modify` (covers read, label changes, send, `watch`, `history.list`) plus `openid email` (the ID token's `sub` becomes `google_id` and its `email` becomes `users.email`). No other Gmail scope is needed.
 - Gmail identifiers: `id`, `threadId`, `historyId` and `internalDate` arrive from Gmail as strings. Application code keeps `historyId` as a string end to end; it is stored as `bigint` but must never pass through a JS `number` (precision loss above 2^53).
 - Session: after successful OAuth, the client receives a JWT whose `sub` claim is the user's `users.id`, and must send it as an `Authorization: Bearer <jwt>` header on every authenticated request. Every authenticated endpoint acts only on that user's data. The JWT expires after 1 hour; once expired, requests fail with `AUTH_FAILED` (`recoverable: true`) and the client re-runs the OAuth flow to obtain a fresh token.
@@ -129,7 +130,7 @@ Starts the OAuth flow. Not session-authenticated; this is where clients are sent
 
 **Request:** no params.
 
-**Success response:** `302 Found` to Google's consent URL, built by the OAuth2 client's `generateAuthUrl` with `access_type=offline`, `prompt=consent`, the scopes from §2, and a random `state`. The same `state` is set in an `oauth_state` cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, 10-minute max-age) so the callback can verify it without server-side storage.
+**Success response:** `302 Found` to Google's consent URL, built by the OAuth2 client's `generateAuthUrl` with `access_type=offline`, `prompt=consent`, the scopes from §2, and a random `state`. The same `state` is set in an `oauth_state` cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/api/v1/auth`, 10-minute max-age) so the callback can verify it without server-side storage.
 
 **Errors:**
 | Status | Code | Notes |
