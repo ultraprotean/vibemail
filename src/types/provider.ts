@@ -34,6 +34,18 @@ export interface TokenUpdate {
 
 export type TokenListener = (update: TokenUpdate) => Promise<void>;
 
+/** Who authorized: the provider's stable account id (stored as `google_id`, §4) and email. */
+export interface ProviderIdentity {
+  providerUserId: string;
+  email: string;
+}
+
+/** Result of a successful authorization-code exchange (§6.2 steps 1–2). */
+export interface AuthorizationGrant {
+  tokens: ProviderTokens;
+  identity: ProviderIdentity;
+}
+
 // ---------------------------------------------------------------------------
 // Messages
 // ---------------------------------------------------------------------------
@@ -161,11 +173,11 @@ export interface EmailProvider {
   buildAuthUrl(state: string): string;
 
   /**
-   * §6.2 step 1 — Exchange an authorization code for tokens and confirm every required
-   * scope was granted.
+   * §6.2 steps 1–2 — Exchange an authorization code for tokens, confirm every required
+   * scope was granted, and identify the account that authorized.
    * @throws ProviderError `AUTH_CODE_INVALID`, `AUTH_SCOPE_MISSING`, or `UPSTREAM`.
    */
-  exchangeCode(code: string): Promise<ProviderTokens>;
+  exchangeCode(code: string): Promise<AuthorizationGrant>;
 
   /**
    * Create a client authorized with stored tokens. The client refreshes access tokens
@@ -184,9 +196,6 @@ export interface MailboxClient {
    * check a stored refresh token is still alive. The result is also sent to the listener.
    */
   refreshAccessToken(): Promise<ProviderTokens>;
-
-  /** §6.2 step 2 — The mailbox owner's email address. */
-  getAccountEmail(): Promise<string>;
 
   /** §6.2 step 4 — Most recent messages first, fully populated (backfill and resync). */
   listMessages(opts: { limit: number; pageCursor?: string }): Promise<MessagePage>;
