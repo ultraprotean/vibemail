@@ -99,6 +99,7 @@ export type Database = {
           access_token_enc: string
           created_at: string
           email: string
+          google_id: string
           id: string
           last_history_id: number | null
           refresh_token_enc: string
@@ -110,6 +111,7 @@ export type Database = {
           access_token_enc: string
           created_at?: string
           email: string
+          google_id: string
           id?: string
           last_history_id?: number | null
           refresh_token_enc: string
@@ -121,6 +123,7 @@ export type Database = {
           access_token_enc?: string
           created_at?: string
           email?: string
+          google_id?: string
           id?: string
           last_history_id?: number | null
           refresh_token_enc?: string

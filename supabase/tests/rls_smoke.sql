@@ -4,10 +4,10 @@
 begin;
 
 -- Fixtures (as the migration owner, bypassing RLS).
-insert into public.users (id, email, access_token_enc, refresh_token_enc, token_expires_at)
+insert into public.users (id, google_id, email, access_token_enc, refresh_token_enc, token_expires_at)
 values
-  ('00000000-0000-0000-0000-00000000000a', 'rls-a@example.test', '\x00', '\x00', now() + interval '1 hour'),
-  ('00000000-0000-0000-0000-00000000000b', 'rls-b@example.test', '\x00', '\x00', now() + interval '1 hour');
+  ('00000000-0000-0000-0000-00000000000a', 'google-a', 'rls-a@example.test', '\x00', '\x00', now() + interval '1 hour'),
+  ('00000000-0000-0000-0000-00000000000b', 'google-b', 'rls-b@example.test', '\x00', '\x00', now() + interval '1 hour');
 
 insert into public.messages
   (user_id, id, thread_id, subject, from_address, to_address, snippet, label_ids, received_at, history_id)
@@ -78,8 +78,8 @@ begin
   end;
 
   begin
-    insert into public.users (email, access_token_enc, refresh_token_enc, token_expires_at)
-    values ('new@example.test', '\x00', '\x00', now());
+    insert into public.users (google_id, email, access_token_enc, refresh_token_enc, token_expires_at)
+    values ('google-new', 'new@example.test', '\x00', '\x00', now());
     raise exception 'authenticated must not insert users';
   exception when insufficient_privilege then null;
   end;
