@@ -265,27 +265,33 @@ Pub/Sub treats `102`, `200`, `201`, `202` and `204` as acknowledged; **any other
 ```
 Other envelope fields (`attributes`, `message_id`, `publish_time`, `deliveryAttempt`) may be present and are ignored. Decoded `data` JSON (base64): `{ "emailAddress": "string", "historyId": "string" }`.
 
-**Processing is synchronous.** The handler finishes all sync work *before* responding. Serverless functions don't reliably run work after the response is sent, and a failure must still be able to return 500 so Pub/Sub retries. The notification's `historyId` only signals that something changed; the sync always reads forward from the stored watermark:
+**Acknowledge first, then process.** The handler checks the `token` and parses the envelope, replies `200` straight away, and only then syncs. On Vercel the sync is kept alive after the response with `waitUntil` (from `@vercel/functions`); without it the platform may stop the function once the response is sent. Acknowledging first means Pub/Sub never redelivers a notification just because the sync was slow.
 
-1. Find the user whose `users.email` equals `emailAddress`. If there is none, acknowledge with `204` and do nothing.
-2. Using that user's tokens, call `history.list` with `startHistoryId = users.last_history_id`, following `nextPageToken` until exhausted.
-3. Apply records to that user's messages only: `messagesAdded` → `messages.get` (`format=full`) and upsert; `labelsAdded`/`labelsRemoved` → update `labelIds` and `isRead`; `messagesDeleted` → delete the row. If `messages.get` returns 404 (the message was deleted since the record was written), skip it.
-4. Set the user's `last_history_id` to the `historyId` of the final `history.list` response, but only if it is greater than the stored value (a redelivered older notification must never move the watermark backwards).
+The trade-off is that **a failed sync is not retried by Pub/Sub**. That's acceptable because the watermark only moves after a successful sync: the next notification for that user reads forward from the same old watermark and picks up everything the failed run missed. Failures are logged.
 
-**History expired.** If `history.list` returns `404` (Google keeps history for about a week, sometimes only hours), run a full resync for that user instead: fetch the current mailbox `historyId` via `users.getProfile`, re-run the 50-message backfill from §6.2, then store that `historyId` as `last_history_id`. This is a success path, not an error.
+The notification's `historyId` only signals that something changed; the sync always reads forward from the stored watermark:
 
-**Dead refresh token.** If the user's refresh token is rejected (`invalid_grant`), acknowledge with `204`: nothing can succeed until that user re-consents, and redelivery would retry forever.
+1. Find the user whose `users.email` equals `emailAddress`. If there is none, do nothing.
+2. Using that user's tokens, call `history.list` with `startHistoryId = users.last_history_id`, following `nextPageToken` until exhausted. `last_history_id` is read as text (`last_history_id::text`) so it never passes through a JS number (§2).
+3. Apply records to that user's messages only, in order, so a later record for the same message wins:
+   - `messagesAdded`, `labelsAdded`, `labelsRemoved` → `messages.get` (`format=full`) and upsert, which refreshes `label_ids` (and so the generated `is_read`).
+   - `messagesDeleted` → delete the row.
+   - If `messages.get` returns 404 (deleted since the record was written), delete the row too.
+4. Set the user's `last_history_id` to the `historyId` of the final `history.list` response, but only if it is greater than the stored value (a redelivered older notification must never move the watermark backwards). This is a single conditional `UPDATE`, so two concurrent syncs can't move it backwards either.
 
-Processing must be idempotent (Pub/Sub may redeliver); every write above is an upsert, a delete, or a monotonic watermark update.
+**History expired.** If `history.list` returns `404` (Google keeps history for about a week, sometimes only hours), run a full resync for that user instead: fetch the current mailbox `historyId` via `users.getProfile`, re-run the 50-message backfill from §6.2, then store that `historyId` as `last_history_id` (same forward-only rule).
 
-**Success response:** `200 OK`, empty body (`204` for the ignored cases above).
+**Dead refresh token.** If the user's refresh token is rejected (`invalid_grant`), do nothing: nothing can succeed until that user re-consents.
 
-**Errors:**
-| Status | Code | Notes |
+Processing must be idempotent (Pub/Sub may still redeliver); every write above is an upsert, a delete, or a forward-only watermark update.
+
+**Response:** sent before any sync work.
+
+| Status | Code | When |
 |---|---|---|
-| 401 | `UNAUTHORIZED` | `token` query param missing or mismatched (redelivered until the configuration is fixed) |
+| 200 | — | token valid and envelope parsed; sync runs in the background |
 | 204 | — | malformed Pub/Sub envelope or undecodable `data`: logged and **acknowledged**, because redelivering a message that can never be parsed would retry forever |
-| 500 | `INTERNAL_ERROR` | processing failed (including Gmail or Supabase errors) — return 500 so Pub/Sub retries with backoff |
+| 401 | `UNAUTHORIZED` | `token` query param missing or mismatched (redelivered until the configuration is fixed) |
 
 ### 6.7 `GET /cron/renew-watch`
 
