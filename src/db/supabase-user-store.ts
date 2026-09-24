@@ -130,7 +130,7 @@ export class SupabaseUserStore implements UserStore {
       .update({
         // bigint column; sent as a string so no precision is lost (CONTRACT.md §2).
         last_history_id: watch.lastHistoryId,
-        watch_expiry: watch.watchExpiry.toISOString(),
+        watch_expiration: watch.watchExpiry.toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('google_id', googleId);

@@ -6,7 +6,7 @@ The project is complete when all of the following hold:
 
 - [ ] Multiple Google accounts can connect; each user sees and acts on only their own mailbox.
 - [ ] Gmail OAuth completes end-to-end and encrypted tokens persist in Supabase.
-- [ ] A user's first authentication triggers an initial sync of their 50 most recent messages.
+- [ ] A user's first authentication triggers an initial sync of their 50 most recent inbox messages.
 - [ ] New messages and read-state changes arrive via Gmail Pub/Sub push notifications — no polling.
 - [ ] The Gmail watch is renewed daily by cron (§6.7), so push notifications don't lapse after Google's 7-day limit.
 - [ ] Expired history (`history.list` 404) triggers a full resync rather than a failure loop.
@@ -54,23 +54,27 @@ This is a **multi-user** system: any number of Google accounts can connect, one 
 
 One row per Gmail message per user, populated by the sync process (initial backfill + Pub/Sub-triggered incremental sync). Gmail message ids are only unique within one mailbox, so the primary key is `(user_id, id)`.
 
-| Field | Type | Source in Gmail API `messages.get` response |
-|---|---|---|
-| `user_id` | `uuid`, FK → `users.id` (`on delete cascade`) | the mailbox being synced, not from Gmail |
-| `id` | `text` (PK with `user_id`) | `message.id` |
-| `threadId` | `text` | `message.threadId` |
-| `subject` | `text` | `payload.headers[name="Subject"].value` |
-| `from` | `text` | `payload.headers[name="From"].value` |
-| `to` | `text` | `payload.headers[name="To"].value` |
-| `cc` | `text`, nullable | `payload.headers[name="Cc"].value` |
-| `snippet` | `text` | `message.snippet` |
-| `bodyText` | `text`, nullable | decoded base64url `body.data` of the first `text/plain` part found by depth-first search of the whole `payload` tree (parts nest, e.g. `multipart/alternative` inside `multipart/mixed`); `payload.body.data` if `payload` itself is `text/plain`. Parts with a `filename` or `body.attachmentId` are skipped. |
-| `bodyHtml` | `text`, nullable | same search rule as `bodyText`, for the first `text/html` part |
-| `labelIds` | `text[]` | `message.labelIds` |
-| `isRead` | `boolean`, derived | `!labelIds.includes('UNREAD')` — not a direct Gmail field |
-| `receivedAt` | `timestamptz` | `message.internalDate` (epoch ms, converted) |
-| `historyId` | `bigint` | `message.historyId` |
-| `syncedAt` | `timestamptz` | set by our sync process, not from Gmail |
+Postgres columns are snake_case (the schema branch migration is the source of truth for names); the API layer maps them to the camelCase fields in §6.
+
+| Column | API field | Type | Source in Gmail API `messages.get` response |
+|---|---|---|---|
+| `user_id` | — | `uuid`, FK → `users.id` (`on delete cascade`) | the mailbox being synced, not from Gmail |
+| `id` | `id` | `text` (PK with `user_id`) | `message.id` |
+| `thread_id` | `threadId` | `text` | `message.threadId` |
+| `subject` | `subject` | `text`, not null (`''` if absent) | header `Subject` (header names matched case-insensitively) |
+| `from_address` | `from` | `text`, not null (`''` if absent) | header `From` |
+| `to_address` | `to` | `text`, not null (`''` if absent) | header `To` |
+| `cc` | `cc` | `text`, nullable | header `Cc` |
+| `snippet` | `snippet` | `text` | `message.snippet` |
+| `body_text` | `bodyText` | `text`, nullable | decoded base64url `body.data` of the first `text/plain` part found by depth-first search of the whole `payload` tree (parts nest, e.g. `multipart/alternative` inside `multipart/mixed`); `payload.body.data` if `payload` has no `parts` and is `text/plain`. Parts with a `filename` or `body.attachmentId` are skipped. |
+| `body_html` | `bodyHtml` | `text`, nullable | same search rule as `body_text`, for the first `text/html` part |
+| `label_ids` | — | `text[]` | `message.labelIds` |
+| `is_read` | `isRead` | `boolean`, **generated** | `NOT ('UNREAD' = ANY(label_ids))` — never written directly; change `label_ids` instead |
+| `received_at` | `receivedAt` | `timestamptz` | `message.internalDate` (epoch ms, converted); the `Date` header only if `internalDate` is missing |
+| `history_id` | — | `bigint` | `message.historyId` |
+| `synced_at` | — | `timestamptz` | set by our sync process, not from Gmail |
+
+Starred state has no column: it is `'STARRED' = ANY(label_ids)`, derived where needed.
 
 Attachments are explicitly **out of scope** for this model (send has no attachment support; received-attachment metadata is deferred).
 
@@ -83,13 +87,13 @@ One row per connected Google account. Re-consent by the same account updates its
 | Field | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK, default `gen_random_uuid()` | our user id; the JWT `sub` (§2) |
-| `google_id` | `text`, unique, not null | ID token `sub` claim: Google's stable account id (an email address can change, this can't) |
-| `email` | `text`, not null | ID token `email` claim at OAuth time; used to route webhook notifications (§6.6) |
+| `google_id` | `text`, unique, not null | ID token `sub` claim: Google's stable account id (an email address can change, this can't). **Pending in the schema branch migration.** |
+| `email` | `text`, unique, not null | ID token `email` claim at OAuth time; used to route webhook notifications (§6.6) |
 | `access_token_enc` | `bytea`, not null | encrypted, see "Token encryption" below |
-| `refresh_token_enc` | `bytea`, nullable | encrypted; follows the §3 merge rule (never overwritten with null) |
+| `refresh_token_enc` | `bytea`, not null | encrypted; follows the §3 merge rule (never overwritten with null). Always present because §6.1 forces consent. |
 | `token_expires_at` | `timestamptz`, not null | |
 | `last_history_id` | `bigint`, nullable | Gmail mailbox historyId watermark; incremental sync resumes from here. Initial value: the `historyId` returned by `users.watch()`, captured **before** the backfill starts, so changes arriving during the backfill are replayed rather than missed (replays are safe because sync is idempotent). |
-| `watch_expiry` | `timestamptz`, nullable | Gmail `users.watch()` expiration (epoch ms, converted). Google requires renewal at least every 7 days; the cron in §6.7 renews it daily. |
+| `watch_expiration` | `timestamptz`, nullable | Gmail `users.watch()` expiration (epoch ms, converted). Google requires renewal at least every 7 days; the cron in §6.7 renews it daily. |
 | `created_at` / `updated_at` | `timestamptz` | |
 
 Gmail's `watch()` response has no resource or channel id (unlike Drive and Calendar watch channels), so there is nothing else to store for a watch.
@@ -144,8 +148,8 @@ OAuth redirect target from Google.
 Side effects, in order:
 1. Exchange `code` for tokens and check the granted scopes include `gmail.modify` (users can approve only some of the requested scopes).
 2. Verify the returned ID token and read its `sub` (→ `google_id`) and `email`. Encrypt the tokens and upsert the `users` row on conflict `google_id` (applying the §3 merge rule to `refresh_token_enc`).
-3. Register `users.watch()` on `GOOGLE_PUBSUB_TOPIC`; store its `expiration` as `watch_expiry` and its `historyId` as `last_history_id`.
-4. Run the initial backfill of that user's 50 most recent messages (`messages.list` with `maxResults=50`, then `messages.get` with `format=full` for each), upserting by `(user_id, id)`.
+3. Register `users.watch()` on `GOOGLE_PUBSUB_TOPIC`; store its `expiration` as `watch_expiration` and its `historyId` as `last_history_id`.
+4. Run the initial backfill of that user's 50 most recent **inbox** messages (`messages.list` with `labelIds=INBOX`, following `nextPageToken` until 50 are collected, then `messages.get` with `format=full` for each), upserting by `(user_id, id)`. The backfill does not touch `last_history_id` (`messages.list` returns no `historyId`; the watermark from step 3 already covers everything after the backfill began).
 5. Issue a JWT with `sub` = `users.id`.
 
 **Errors:**
@@ -285,7 +289,7 @@ Invoked daily by Vercel Cron. Google stops push notifications if `users.watch()`
 
 **Request:** header `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically when `CRON_SECRET` is set). No params.
 
-**Behavior:** for every user, calls `users.watch()` again with the same topic and updates that user's `watch_expiry`. `last_history_id` is not changed. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
+**Behavior:** for every user, calls `users.watch()` again with the same topic and updates that user's `watch_expiration`. `last_history_id` is not changed. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
 
 **Success response:** `200 OK`, even if some users failed (the per-user results are the signal):
 ```json
