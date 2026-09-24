@@ -1,4 +1,4 @@
--- RLS smoke test for the init schema. Runs in a transaction and rolls back,
+-- RLS smoke test for the schema. Runs in a transaction and rolls back,
 -- so it leaves no data behind. Any failed assertion raises and aborts.
 
 begin;
@@ -14,9 +14,6 @@ insert into public.messages
 values
   ('00000000-0000-0000-0000-00000000000a', 'msg-a', 't-a', 's', 'f', 't', 'x', '{INBOX,UNREAD}', now(), 1),
   ('00000000-0000-0000-0000-00000000000b', 'msg-b', 't-b', 's', 'f', 't', 'x', '{INBOX,UNREAD}', now(), 1);
-
-insert into public.oauth_states (state) values ('rls-state');
-insert into public.webhook_events (message_id, email_address, history_id) values ('rls-evt', 'rls-a@example.test', 1);
 
 -- is_read is derived from label_ids.
 do $$
@@ -83,18 +80,6 @@ begin
     raise exception 'authenticated must not insert users';
   exception when insufficient_privilege then null;
   end;
-
-  begin
-    perform 1 from public.oauth_states;
-    raise exception 'authenticated must not read oauth_states';
-  exception when insufficient_privilege then null;
-  end;
-
-  begin
-    perform 1 from public.webhook_events;
-    raise exception 'authenticated must not read webhook_events';
-  exception when insufficient_privilege then null;
-  end;
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -107,7 +92,7 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 do $$
 declare t text;
 begin
-  foreach t in array array['users', 'messages', 'oauth_states', 'webhook_events'] loop
+  foreach t in array array['users', 'messages'] loop
     begin
       execute format('select 1 from public.%I', t);
       raise exception 'anon must not read %', t;

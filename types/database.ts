@@ -76,24 +76,6 @@ export type Database = {
           },
         ]
       }
-      oauth_states: {
-        Row: {
-          created_at: string
-          expires_at: string
-          state: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at?: string
-          state: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          state?: string
-        }
-        Relationships: []
-      }
       users: {
         Row: {
           access_token_enc: string
@@ -130,30 +112,6 @@ export type Database = {
           token_expires_at?: string
           updated_at?: string
           watch_expiration?: string | null
-        }
-        Relationships: []
-      }
-      webhook_events: {
-        Row: {
-          email_address: string
-          history_id: number
-          message_id: string
-          processed_at: string | null
-          received_at: string
-        }
-        Insert: {
-          email_address: string
-          history_id: number
-          message_id: string
-          processed_at?: string | null
-          received_at?: string
-        }
-        Update: {
-          email_address?: string
-          history_id?: number
-          message_id?: string
-          processed_at?: string | null
-          received_at?: string
         }
         Relationships: []
       }

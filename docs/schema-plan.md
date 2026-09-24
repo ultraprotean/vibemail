@@ -7,6 +7,8 @@
 - **Verification** steps 1–4 passed against the linked dev project. Step 5 (`tsc`) passed on `types/database.ts` standalone; the project `tsconfig.json` only includes `src/` and `api/`, so it doesn't cover `types/` yet.
 - **Advisor note:** the Supabase advisors flag `public.rls_auto_enable()`, a platform-installed function (not from this migration) that `anon`/`authenticated` can execute via `/rest/v1/rpc`. Worth revoking in project settings.
 
+- **Superseded in part** (reconciled with CONTRACT.md on `main`): `20260924000001` adds unique `users.google_id` (upsert key); `20260924000002` drops `oauth_states` and `webhook_events` (CSRF state moved to a cookie; webhook idempotency comes from upserts plus a monotonic watermark). The server uses the service role key only, so the minted-JWT access model below is not used; RLS remains as defense in depth.
+
 ## Context
 
 This worktree is the **schema session** (on `schema`, tracking `origin/schema`). CONTRACT.md §4 and CLAUDE.md described a single-user system (singleton `account`, no `user_id`), but the schema was changed to **multi-user with RLS-enforced per-user isolation**. Decisions:
