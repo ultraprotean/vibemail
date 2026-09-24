@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1–5 are done (provider interface `src/types/provider.ts`; Gmail provider in `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; send `src/send/`; read state `src/read-state/`), except watch renewal (`/cron/renew-watch`). Unit 6 (Vercel entry points in `api/`, thin wrappers over the Web-standard handlers in `src/http/handlers.ts`, with JWT in `src/auth/jwt.ts` and env config in `src/config.ts`) is in progress. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
+Build progress: units 1–5 are done (provider interface `src/types/provider.ts`; Gmail provider in `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; watch renewal cron `src/cron/renewWatch.ts`, scheduled in `vercel.json`; send `src/send/`; read state `src/read-state/`). Unit 6 (Vercel entry points in `api/`, thin wrappers over the Web-standard handlers in `src/http/handlers.ts`, with JWT in `src/auth/jwt.ts` and env config in `src/config.ts`) is in progress. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
 
 ## Stack
 
@@ -57,7 +57,7 @@ Do not jump ahead of this ordering: build behind the persistence interface first
 - Cursor-based pagination on all list endpoints.
 - `/api/v1` base path on all client-facing endpoints.
 - JWT Bearer token authentication on all endpoints except the two OAuth endpoints (`/auth/google`, `/auth/google/callback`), the webhook and the cron.
-- The Pub/Sub webhook endpoint lives at `/webhook/gmail` and the watch-renewal cron at `/cron/renew-watch`, both outside `/api/v1`.
+- The Pub/Sub webhook endpoint lives at `/webhook/gmail` and the watch-renewal cron at `/api/cron/renew-watch` (scheduled in `vercel.json`), both outside `/api/v1`.
 
 ## Architecture
 

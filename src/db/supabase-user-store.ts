@@ -4,6 +4,7 @@ import type {
   StoredUserTokens,
   SyncUser,
   UpsertUserInput,
+  WatchDueUser,
   UserStore,
   WatchState,
 } from './user-store';
@@ -171,6 +172,39 @@ export class SupabaseUserStore implements UserStore {
       googleId: requireString(row, 'google_id'),
       lastHistoryId: typeof lastHistoryId === 'string' ? lastHistoryId : null,
     };
+  }
+
+  async findUsersWithWatchDue(cutoff: Date): Promise<WatchDueUser[]> {
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select('id, google_id, watch_expiration')
+      .or(`watch_expiration.is.null,watch_expiration.lte."${cutoff.toISOString()}"`);
+    if (error) {
+      throw new Error(`Failed to list users due for watch renewal: ${error.message}`);
+    }
+    const rows: unknown = data;
+    if (!Array.isArray(rows)) {
+      throw new Error('Unexpected users result');
+    }
+    return rows.map((row: unknown) => {
+      if (!isRecord(row)) throw new Error('Unexpected users row shape');
+      const expiration = row.watch_expiration;
+      return {
+        userId: requireString(row, 'id'),
+        googleId: requireString(row, 'google_id'),
+        watchExpiration: typeof expiration === 'string' ? new Date(expiration) : null,
+      };
+    });
+  }
+
+  async updateWatchExpiration(userId: string, expiresAt: Date): Promise<void> {
+    const { error } = await this.client
+      .from(TABLE)
+      .update({ watch_expiration: expiresAt.toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) {
+      throw new Error(`Failed to update watch expiration: ${error.message}`);
+    }
   }
 
   async advanceHistoryId(userId: string, historyId: string): Promise<boolean> {

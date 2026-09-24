@@ -323,6 +323,19 @@ export class GmailAuth implements Pick<EmailProvider, 'buildAuthUrl' | 'exchange
   }
 
   /**
+   * §6.7 — Register or renew `users.watch` on the configured Pub/Sub topic for the mailbox
+   * `client` is authorized for. Renewing is the same call as registering.
+   * @throws ProviderError (`AUTH_REVOKED` if the refresh token is dead).
+   */
+  async registerWatch(client: OAuth2Client): Promise<WatchRegistration> {
+    try {
+      return await this.watch(client, this.config.pubsubTopic);
+    } catch (err) {
+      throw toProviderError(err, 'refresh');
+    }
+  }
+
+  /**
    * Token persistence listener. The OAuth2 client emits `tokens` whenever it obtains new
    * tokens, including automatic refreshes. Each emission is encrypted and written back via
    * `updateUserTokens` immediately. Writes run one at a time in emission order, so an older

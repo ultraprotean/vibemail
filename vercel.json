@@ -1,4 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/webhook/gmail", "destination": "/api/webhook/gmail" }]
+  "rewrites": [
+    { "source": "/webhook/gmail", "destination": "/api/webhook/gmail" },
+    { "source": "/cron/renew-watch", "destination": "/api/cron/renew-watch" }
+  ],
+  "crons": [{ "path": "/api/cron/renew-watch", "schedule": "0 6 * * *" }]
 }

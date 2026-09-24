@@ -8,6 +8,7 @@ import { setMessageReadState } from '../read-state';
 import { parseSendRequest, sendAndStore } from '../send';
 import { runInitialSync } from '../sync';
 import { ProviderError, type MailboxClient } from '../types/provider';
+import { renewWatches } from '../cron/renewWatch';
 import { handleGmailWebhook, processGmailNotification, tokensMatch } from '../webhook/gmail';
 import { clearStateCookie, OAUTH_STATE_COOKIE, readCookie, stateCookie } from './cookies';
 import { corsHeaders, preflightResponse } from './cors';
@@ -22,13 +23,20 @@ import { withAuth } from './session';
 
 export type AppMailbox = Pick<
   MailboxClient,
-  'listMessages' | 'getMessage' | 'listChangesSince' | 'getCurrentCursor' | 'sendMessage' | 'setReadState'
+  | 'listMessages'
+  | 'getMessage'
+  | 'listChangesSince'
+  | 'getCurrentCursor'
+  | 'sendMessage'
+  | 'setReadState'
+  | 'watchMailbox'
 >;
 
 export interface AppDeps {
   jwtSecret: string;
   frontendUrl: string;
   pubsubVerificationToken: string;
+  cronSecret: string;
   users: UserStore;
   messages: MessageStore;
   auth: {
@@ -281,6 +289,22 @@ export function gmailWebhookHandler(deps: AppDeps): Handler {
       return response.body
         ? errorResponse(response.status, response.body.error.code, response.body.error.message)
         : new Response(null, { status: response.status });
+    });
+}
+
+// ---------------------------------------------------------------------------
+// §6.7 GET /api/cron/renew-watch (also /cron/renew-watch)
+// ---------------------------------------------------------------------------
+
+export function renewWatchHandler(deps: AppDeps): Handler {
+  return async (request) =>
+    handleErrors(async () => {
+      const match = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization')?.trim() ?? '');
+      if (!match || !tokensMatch(match[1], deps.cronSecret)) {
+        return errorResponse(401, 'UNAUTHORIZED', 'Invalid cron secret');
+      }
+      const result = await renewWatches({ users: deps.users, connect: deps.connect });
+      return jsonResponse(200, result);
     });
 }
 

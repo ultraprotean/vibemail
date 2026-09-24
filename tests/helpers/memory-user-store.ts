@@ -3,6 +3,7 @@ import type {
   StoredUserTokens,
   SyncUser,
   UpsertUserInput,
+  WatchDueUser,
   UserStore,
   WatchState,
 } from '../../src/db/user-store';
@@ -73,6 +74,19 @@ export class MemoryUserStore implements UserStore {
       }
     }
     return null;
+  }
+
+  async findUsersWithWatchDue(cutoff: Date): Promise<WatchDueUser[]> {
+    return [...this.rows.values()]
+      .filter((r) => !r.watch || r.watch.watchExpiry.getTime() <= cutoff.getTime())
+      .map((r) => ({ userId: r.userId, googleId: r.googleId, watchExpiration: r.watch?.watchExpiry ?? null }));
+  }
+
+  async updateWatchExpiration(userId: string, expiresAt: Date): Promise<void> {
+    for (const row of this.rows.values()) {
+      if (row.userId === userId && row.watch) row.watch = { ...row.watch, watchExpiry: expiresAt };
+      else if (row.userId === userId) row.watch = { lastHistoryId: row.lastHistoryId ?? '', watchExpiry: expiresAt };
+    }
   }
 
   async advanceHistoryId(userId: string, historyId: string): Promise<boolean> {

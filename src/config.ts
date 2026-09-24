@@ -15,6 +15,8 @@ export interface AppConfig {
   encryptionKey: string;
   /** Origin of the frontend, e.g. `http://localhost:3001` (no trailing slash). */
   frontendUrl: string;
+  /** Vercel Cron sends it as `Authorization: Bearer <CRON_SECRET>` (§6.7). */
+  cronSecret: string;
 }
 
 const VARIABLES = {
@@ -28,6 +30,7 @@ const VARIABLES = {
   jwtSecret: 'JWT_SECRET',
   encryptionKey: 'ENCRYPTION_KEY',
   frontendUrl: 'FRONTEND_URL',
+  cronSecret: 'CRON_SECRET',
 } as const satisfies Record<keyof AppConfig, string>;
 
 /** @throws Error naming every missing variable. */
@@ -48,5 +51,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jwtSecret: value('jwtSecret'),
     encryptionKey: value('encryptionKey'),
     frontendUrl: value('frontendUrl').replace(/\/+$/, ''),
+    cronSecret: value('cronSecret'),
   };
 }

@@ -39,6 +39,7 @@ export function productionDeps(): AppDeps {
     jwtSecret: config.jwtSecret,
     frontendUrl: config.frontendUrl,
     pubsubVerificationToken: config.pubsubVerificationToken,
+    cronSecret: config.cronSecret,
     users,
     messages,
     auth,

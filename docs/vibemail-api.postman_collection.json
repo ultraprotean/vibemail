@@ -2063,8 +2063,8 @@
       ]
     },
     {
-      "name": "§6.7 GET /cron/renew-watch",
-      "description": "**Not implemented yet**: these requests return 404 until watch renewal is built. Invoked daily by Vercel Cron with `Authorization: Bearer <CRON_SECRET>`.",
+      "name": "§6.7 GET /api/cron/renew-watch",
+      "description": "Renews Gmail watches expiring within 24 hours (or missing). Run daily at 06:00 UTC by Vercel Cron with `Authorization: Bearer <CRON_SECRET>`; `/cron/renew-watch` also works.",
       "item": [
         {
           "name": "Happy path: renew all watches",
@@ -2077,11 +2077,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/cron/renew-watch",
+              "raw": "{{baseUrl}}/api/cron/renew-watch",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
+                "api",
                 "cron",
                 "renew-watch"
               ]
@@ -2111,11 +2112,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/cron/renew-watch",
+              "raw": "{{baseUrl}}/api/cron/renew-watch",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
+                "api",
                 "cron",
                 "renew-watch"
               ]
@@ -2153,11 +2155,12 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/cron/renew-watch",
+                  "raw": "{{baseUrl}}/api/cron/renew-watch",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
+                    "api",
                     "cron",
                     "renew-watch"
                   ]

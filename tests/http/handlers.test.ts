@@ -8,6 +8,7 @@ import {
   markReadHandler,
   messageIdFromPath,
   preflightHandler,
+  renewWatchHandler,
   sendMessageHandler,
   type AppDeps,
   type AppMailbox,
@@ -71,6 +72,7 @@ async function setup() {
     setReadState: jest.fn(async (_id: string, isRead: boolean) => ({
       labels: isRead ? ['INBOX'] : ['INBOX', 'UNREAD'],
     })),
+    watchMailbox: jest.fn(async () => ({ cursor: '999', expiresAt: new Date('2026-10-01T00:00:00Z') })),
   } satisfies AppMailbox;
 
   const settled = jest.fn(async () => undefined);
@@ -90,6 +92,7 @@ async function setup() {
     jwtSecret: SECRET,
     frontendUrl: FRONTEND,
     pubsubVerificationToken: 'pubsub-token',
+    cronSecret: 'cron-secret',
     users,
     messages,
     auth,
@@ -431,6 +434,35 @@ describe('POST /webhook/gmail', () => {
     const { deps, deferred } = await setup();
     expect((await push(deps, 'pubsub-token', '{broken')).status).toBe(204);
     expect(deferred).toHaveLength(0);
+  });
+});
+
+describe('GET /api/cron/renew-watch', () => {
+  const cron = (deps: AppDeps, auth?: string) =>
+    renewWatchHandler(deps)(
+      new Request(`${BASE}/api/cron/renew-watch`, { headers: auth ? { Authorization: auth } : {} }),
+    );
+
+  it('renews due watches with the cron secret and reports counts', async () => {
+    const { deps, users, mailbox } = await setup();
+    // The seeded user's watch expires "now", so it is due.
+    const res = await cron(deps, 'Bearer cron-secret');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ renewed: 1, skippedAuthRevoked: 0, failed: 0 });
+    expect(mailbox.watchMailbox).toHaveBeenCalledTimes(1);
+    expect(users.rows.get('google-1')?.watch?.watchExpiry).toEqual(new Date('2026-10-01T00:00:00Z'));
+  });
+
+  it.each([undefined, 'Bearer wrong', 'cron-secret'])('rejects %p with 401 UNAUTHORIZED', async (auth) => {
+    const { deps, mailbox } = await setup();
+    await expectEnvelope(await cron(deps, auth), 401, 'UNAUTHORIZED');
+    expect(mailbox.watchMailbox).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 INTERNAL_ERROR when users cannot be listed', async () => {
+    const { deps, users } = await setup();
+    jest.spyOn(users, 'findUsersWithWatchDue').mockRejectedValueOnce(new Error('db down'));
+    await expectEnvelope(await cron(deps, 'Bearer cron-secret'), 500, 'INTERNAL_ERROR');
   });
 });
 

@@ -40,6 +40,14 @@ export interface SyncUser {
   lastHistoryId: string | null;
 }
 
+/** A user whose Gmail watch needs renewing (CONTRACT.md §6.7). */
+export interface WatchDueUser {
+  userId: string;
+  googleId: string;
+  /** Null if no watch was ever registered (e.g. it failed at sign-in). */
+  watchExpiration: Date | null;
+}
+
 export interface UserStore {
   /**
    * Insert or update the user on conflict `google_id` (§6.2 step 2).
@@ -60,6 +68,12 @@ export interface UserStore {
 
   /** The user a session JWT's `sub` names; null if that user no longer exists. */
   findUserById(userId: string): Promise<SyncUser | null>;
+
+  /** §6.7 — Users whose watch expires at or before `cutoff`, or who have none. */
+  findUsersWithWatchDue(cutoff: Date): Promise<WatchDueUser[]>;
+
+  /** §6.7 — Store a renewed watch's expiry. Leaves `last_history_id` untouched. */
+  updateWatchExpiration(userId: string, expiresAt: Date): Promise<void>;
 
   /**
    * §6.6 step 4 — Move `last_history_id` forward to `historyId`, only if it is greater

@@ -5,13 +5,16 @@ import { GmailMessageReader, gmailMessagesApi } from './messages';
 import { GmailReadState, gmailModifyApi } from './read-state';
 import { GmailSender, gmailSendApi } from './send';
 
-/**
- * Every mailbox operation the endpoints use. (`watchMailbox` goes through `GmailAuth`,
- * and `refreshAccessToken` is `GmailAuth.refreshAccessToken`.)
- */
+/** Every mailbox operation the endpoints use (`refreshAccessToken` is `GmailAuth.refreshAccessToken`). */
 export type GmailSyncMailbox = Pick<
   MailboxClient,
-  'listMessages' | 'getMessage' | 'listChangesSince' | 'getCurrentCursor' | 'sendMessage' | 'setReadState'
+  | 'listMessages'
+  | 'getMessage'
+  | 'listChangesSince'
+  | 'getCurrentCursor'
+  | 'sendMessage'
+  | 'setReadState'
+  | 'watchMailbox'
 >;
 
 export interface ConnectedMailbox {
@@ -39,6 +42,7 @@ export async function connectGmailMailbox(auth: GmailAuth, googleId: string): Pr
       getCurrentCursor: () => history.getCurrentCursor(),
       sendMessage: (input) => sender.sendMessage(input),
       setReadState: (id, isRead) => readState.setReadState(id, isRead),
+      watchMailbox: () => auth.registerWatch(client),
     },
     settled: () => persistence.settled(),
   };

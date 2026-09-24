@@ -48,7 +48,7 @@ No changed files at all counts as a PASS.
 - **Unit 1: provider abstraction interface.** `src/types/**` (provider interface), `src/providers/*` (interface files, not `src/providers/gmail/`), `src/db/**` (persistence interface)
 - **Unit 2: Gmail OAuth and token persistence.** `src/providers/gmail/**`, `src/db/**` (user store interface + Supabase impl), `src/types/**` (interface amendments), `src/auth/**` (JWT), `src/crypto/**` (token encrypt/decrypt), `tests/**`
 - **Unit 3: sync and read layer.** `src/providers/gmail/**`, `src/db/**` (message store), `src/types/**` (interface amendments), `src/sync/**`, `tests/**`
-- **Unit 4: Pub/Sub webhook receiver.** `src/webhook/**`, `src/providers/gmail/**` (history, mailbox), `src/db/**` (store additions), `tests/**`
+- **Unit 4: Pub/Sub webhook receiver and watch renewal.** `src/webhook/**`, `src/cron/**`, `api/cron/**`, `vercel.json`, `src/http/**` (cron route handler), `src/config.ts`, `src/providers/gmail/**` (history, mailbox), `src/db/**` (store additions), `tests/**`
 - **Unit 5: send layer and read state.** `src/providers/gmail/**`, `src/send/**`, `src/read-state/**`, `src/db/**` (store additions), `src/types/**` (interface amendments), `tests/**`
 - **Unit 6: Vercel API entry points.** `api/**`, `vercel.json`, `vercel.ts`, `src/http/**` (handlers, envelope, CORS, cookies), `src/auth/**` (JWT), `src/config.ts`, `src/db/**` (store additions), `src/providers/gmail/**` (auth error split), `tests/**`
 - **Unit 7: integration tests.** `tests/**`
