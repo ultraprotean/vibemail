@@ -71,6 +71,12 @@ export interface ProviderMessage {
   cursor: string;
 }
 
+export interface ListMessagesOptions {
+  limit: number;
+  pageCursor?: string;
+  inboxOnly?: boolean;
+}
+
 export interface MessagePage {
   messages: ProviderMessage[];
   nextPageCursor: string | null;
@@ -197,8 +203,11 @@ export interface MailboxClient {
    */
   refreshAccessToken(): Promise<ProviderTokens>;
 
-  /** §6.2 step 4 — Most recent messages first, fully populated (backfill and resync). */
-  listMessages(opts: { limit: number; pageCursor?: string }): Promise<MessagePage>;
+  /**
+   * §6.2 step 4 — Most recent messages first, fully populated (backfill and resync).
+   * Returns at most `limit` messages; `inboxOnly` restricts the listing to the inbox.
+   */
+  listMessages(opts: ListMessagesOptions): Promise<MessagePage>;
 
   /**
    * §6.6 step 3 — One fully populated message.

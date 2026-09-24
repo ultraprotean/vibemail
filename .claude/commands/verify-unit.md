@@ -34,7 +34,7 @@ Run `git diff --name-only` (modified tracked files) and `git ls-files --others -
 
 Classify every file against the scope map below:
 
-- **Forbidden:** anything under `migrations/` or `types/` (owned by the schema session), or any `.env` file other than `.env.example`. The check fails, and each forbidden file is called out explicitly.
+- **Forbidden:** anything under `migrations/`, `supabase/`, or top-level `types/` (owned by the schema session), or any `.env` file other than `.env.example`. The check fails, and each forbidden file is called out explicitly.
 - **In scope:** the file matches the "always allowed" list or the current unit's paths.
 - **Unexpected:** matches neither. The check fails.
 
@@ -47,7 +47,7 @@ No changed files at all counts as a PASS.
 - **Always allowed:** `CONTRACT.md`, `CLAUDE.md`, `BUILD_SEQUENCE.md` (spec amendments), `package.json`, `package-lock.json`, `tsconfig.json`, `tsconfig.*.json`, `jest.config.*`, `.env.example`, `.claude/commands/**`, `src/shared/**` (shared error envelope and types)
 - **Unit 1: provider abstraction interface.** `src/types/**` (provider interface), `src/providers/*` (interface files, not `src/providers/gmail/`), `src/db/**` (persistence interface)
 - **Unit 2: Gmail OAuth and token persistence.** `src/providers/gmail/**`, `src/db/**` (user store interface + Supabase impl), `src/types/**` (interface amendments), `src/auth/**` (JWT), `src/crypto/**` (token encrypt/decrypt), `tests/**`
-- **Unit 3: sync and read layer.** `src/providers/gmail/**`, `src/sync/**`, `tests/**`
+- **Unit 3: sync and read layer.** `src/providers/gmail/**`, `src/db/**` (message store), `src/types/**` (interface amendments), `src/sync/**`, `tests/**`
 - **Unit 4: Pub/Sub webhook receiver.** `src/webhook/**`, `tests/**`
 - **Unit 5: send layer.** `src/providers/gmail/**`, `src/send/**`, `tests/**`
 - **Unit 6: Vercel API entry points.** `api/**`, `vercel.json`, `vercel.ts`, `tests/**`
