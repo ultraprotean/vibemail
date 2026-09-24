@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1–4 are done (provider interface in `src/types/provider.ts`; Gmail OAuth in `src/providers/gmail/auth.ts` with token encryption in `src/crypto/`; message normalization in `src/providers/gmail/messages.ts` and initial sync in `src/sync/`; user and message stores in `src/db/`; Pub/Sub webhook in `src/webhook/gmail.ts` with the history reader in `src/providers/gmail/history.ts`), except watch renewal (`/cron/renew-watch`). Unit 5 (send layer in `src/send/`, read state in `src/read-state/`, with the Gmail sender and `messages.modify` wrapper in `src/providers/gmail/`) is in progress. No `api/` entry points exist yet. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
+Build progress: units 1–5 are done (provider interface `src/types/provider.ts`; Gmail provider in `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; send `src/send/`; read state `src/read-state/`), except watch renewal (`/cron/renew-watch`). Unit 6 (Vercel entry points in `api/`, thin wrappers over the Web-standard handlers in `src/http/handlers.ts`, with JWT in `src/auth/jwt.ts` and env config in `src/config.ts`) is in progress. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
 
 ## Stack
 
@@ -79,7 +79,7 @@ npm test
 npx jest path/to/file.test.ts        # single test file
 npx jest -t "test name"              # single test by name
 
-# Local API preview (unit 6 gate: "all four endpoints respond correctly in local preview")
+# Local API preview (unit 6 gate: every §6 endpoint responds correctly in local preview)
 npx vercel dev
 ```
 

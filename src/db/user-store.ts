@@ -58,6 +58,9 @@ export interface UserStore {
   /** §6.6 step 1 — The user whose mailbox a notification is for, by email. */
   findUserByEmail(email: string): Promise<SyncUser | null>;
 
+  /** The user a session JWT's `sub` names; null if that user no longer exists. */
+  findUserById(userId: string): Promise<SyncUser | null>;
+
   /**
    * §6.6 step 4 — Move `last_history_id` forward to `historyId`, only if it is greater
    * than the stored value (or none is stored). Done as one conditional update, so it can

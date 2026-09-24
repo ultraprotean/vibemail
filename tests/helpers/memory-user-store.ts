@@ -66,6 +66,15 @@ export class MemoryUserStore implements UserStore {
     return null;
   }
 
+  async findUserById(userId: string): Promise<SyncUser | null> {
+    for (const row of this.rows.values()) {
+      if (row.userId === userId) {
+        return { userId: row.userId, googleId: row.googleId, lastHistoryId: row.lastHistoryId };
+      }
+    }
+    return null;
+  }
+
   async advanceHistoryId(userId: string, historyId: string): Promise<boolean> {
     for (const row of this.rows.values()) {
       if (row.userId !== userId) continue;

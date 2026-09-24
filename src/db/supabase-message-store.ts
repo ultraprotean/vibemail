@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ProviderMessage } from '../types/provider';
-import type { MessageStore } from './message-store';
+import type { ListStoredMessagesOptions, MessageStore, MessageSummary } from './message-store';
 
 /**
  * Supabase implementation of `MessageStore`. Column names follow the schema branch
@@ -8,6 +8,9 @@ import type { MessageStore } from './message-store';
  */
 
 const TABLE = 'messages';
+
+const SUMMARY_COLUMNS =
+  'id, thread_id, subject, from_address, to_address, cc, snippet, body_text, body_html, is_read, received_at';
 
 export interface MessageRow {
   user_id: string;
@@ -98,4 +101,64 @@ export class SupabaseMessageStore implements MessageStore {
       throw new Error(`Failed to update message labels: ${error.message}`);
     }
   }
+
+  async listMessages(userId: string, opts: ListStoredMessagesOptions): Promise<MessageSummary[]> {
+    let query = this.client
+      .from(TABLE)
+      .select(SUMMARY_COLUMNS)
+      .eq('user_id', userId)
+      .order('received_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(opts.limit);
+    if (opts.unreadOnly) {
+      query = query.eq('is_read', false);
+    }
+    if (opts.after) {
+      // Keyset: rows strictly after the previous page's last (received_at, id).
+      // Values are interpolated into a PostgREST filter, so both are validated first.
+      const at = opts.after.receivedAt.toISOString();
+      if (!/^[A-Za-z0-9_-]+$/.test(opts.after.id)) {
+        throw new Error('Invalid cursor id');
+      }
+      query = query.or(`received_at.lt."${at}",and(received_at.eq."${at}",id.lt.${opts.after.id})`);
+    }
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`Failed to list messages: ${error.message}`);
+    }
+    const rows: unknown = data;
+    if (!Array.isArray(rows)) {
+      throw new Error('Unexpected messages result');
+    }
+    return rows.map(toSummary);
+  }
+}
+
+function toSummary(row: unknown): MessageSummary {
+  if (typeof row !== 'object' || row === null) {
+    throw new Error('Unexpected messages row shape');
+  }
+  const r: Record<string, unknown> = { ...row };
+  const text = (column: string): string => {
+    const value = r[column];
+    if (typeof value !== 'string') throw new Error(`messages.${column} is missing or not a string`);
+    return value;
+  };
+  const nullableText = (column: string): string | null => {
+    const value = r[column];
+    return typeof value === 'string' ? value : null;
+  };
+  return {
+    id: text('id'),
+    threadId: text('thread_id'),
+    subject: text('subject'),
+    from: text('from_address'),
+    to: text('to_address'),
+    cc: nullableText('cc'),
+    snippet: text('snippet'),
+    bodyText: nullableText('body_text'),
+    bodyHtml: nullableText('body_html'),
+    isRead: r.is_read === true,
+    receivedAt: new Date(text('received_at')),
+  };
 }

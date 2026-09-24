@@ -141,14 +141,22 @@ export class SupabaseUserStore implements UserStore {
   }
 
   async findUserByEmail(email: string): Promise<SyncUser | null> {
+    return this.findSyncUser('email', email);
+  }
+
+  async findUserById(userId: string): Promise<SyncUser | null> {
+    return this.findSyncUser('id', userId);
+  }
+
+  private async findSyncUser(column: 'email' | 'id', value: string): Promise<SyncUser | null> {
     const { data, error } = await this.client
       .from(TABLE)
       // Cast to text so the bigint never passes through a JS number (CONTRACT.md §2).
       .select('id, google_id, last_history_id::text')
-      .eq('email', email)
+      .eq(column, value)
       .maybeSingle();
     if (error) {
-      throw new Error(`Failed to find user by email: ${error.message}`);
+      throw new Error(`Failed to find user by ${column}: ${error.message}`);
     }
     const row: unknown = data;
     if (row === null) {

@@ -74,6 +74,18 @@ export interface GmailAuthDeps {
   onPersistError?: (err: unknown) => void;
 }
 
+/**
+ * The tokens were saved but a later setup step (watch registration) failed. Still an
+ * `UPSTREAM` provider error; the subclass lets the callback return 502 `PROVIDER_ERROR`
+ * rather than the non-recoverable `AUTH_FAILED` used for token-exchange failures.
+ */
+export class PostConsentSetupError extends ProviderError {
+  constructor(message: string, cause?: unknown) {
+    super('UPSTREAM', message, cause);
+    this.name = 'PostConsentSetupError';
+  }
+}
+
 export interface CompletedAuthorization {
   userId: string;
   googleId: string;
@@ -227,8 +239,8 @@ export class GmailAuth implements Pick<EmailProvider, 'buildAuthUrl' | 'exchange
    * `google_id`, then register `users.watch` and store its expiry and initial history id.
    * The backfill (step 4) and JWT (step 5) belong to later units.
    *
-   * @throws ProviderError from `exchangeCode`, or `UPSTREAM` if `watch()` fails after the
-   * tokens were saved (CONTRACT.md §6.2: 502 `PROVIDER_ERROR`, safe to retry).
+   * @throws ProviderError from `exchangeCode`, or `PostConsentSetupError` if `watch()` fails
+   * after the tokens were saved (CONTRACT.md §6.2: 502 `PROVIDER_ERROR`, safe to retry).
    */
   async completeAuthorization(code: string): Promise<CompletedAuthorization> {
     const { tokens, identity } = await this.exchangeCode(code);
@@ -252,7 +264,10 @@ export class GmailAuth implements Pick<EmailProvider, 'buildAuthUrl' | 'exchange
     try {
       watch = await this.watch(client, this.config.pubsubTopic);
     } catch (err) {
-      throw toProviderError(err, 'api');
+      const mapped = toProviderError(err, 'api');
+      // A dead refresh token is still an auth failure; anything else is a setup failure.
+      if (mapped.kind === 'AUTH_REVOKED' || mapped.kind === 'RATE_LIMITED') throw mapped;
+      throw new PostConsentSetupError(`users.watch failed: ${mapped.message}`, err);
     }
     await this.deps.store.saveWatch(googleId, {
       lastHistoryId: watch.cursor,

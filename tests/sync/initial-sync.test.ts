@@ -41,6 +41,7 @@ function recordingStore() {
     deleteMessages: async () => undefined,
     getMessageLabels: async () => null,
     setMessageLabels: async () => undefined,
+    listMessages: async () => [],
   };
   return { store, upserts };
 }
@@ -101,6 +102,7 @@ describe('runInitialSync', () => {
       deleteMessages: async () => undefined,
       getMessageLabels: async () => null,
       setMessageLabels: async () => undefined,
+      listMessages: async () => [],
     };
     await expect(runInitialSync('user-1', { mailbox: fakeMailbox(5, 5), store })).rejects.toThrow('db down');
   });

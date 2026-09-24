@@ -1,4 +1,4 @@
-import type { MessageStore } from '../../src/db/message-store';
+import type { ListStoredMessagesOptions, MessageStore, MessageSummary } from '../../src/db/message-store';
 import type { ProviderMessage } from '../../src/types/provider';
 
 /** In-memory `MessageStore` keyed `(user_id, id)`, like the `messages` table. */
@@ -25,6 +25,33 @@ export class MemoryMessageStore implements MessageStore {
     const row = this.rows.get(this.key(userId, id));
     // Mirrors the generated is_read column.
     if (row) Object.assign(row, { labels, isRead: !labels.includes('UNREAD') });
+  }
+
+  async listMessages(userId: string, opts: ListStoredMessagesOptions): Promise<MessageSummary[]> {
+    const { after } = opts;
+    return [...this.rows.values()]
+      .filter((r) => r.userId === userId && (!opts.unreadOnly || !r.isRead))
+      .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+      .filter(
+        (r) =>
+          !after ||
+          r.receivedAt.getTime() < after.receivedAt.getTime() ||
+          (r.receivedAt.getTime() === after.receivedAt.getTime() && r.id < after.id),
+      )
+      .slice(0, opts.limit)
+      .map((r) => ({
+        id: r.id,
+        threadId: r.threadId,
+        subject: r.subject,
+        from: r.from,
+        to: r.to,
+        cc: r.cc,
+        snippet: r.snippet,
+        bodyText: r.bodyText,
+        bodyHtml: r.bodyHtml,
+        isRead: r.isRead,
+        receivedAt: r.receivedAt,
+      }));
   }
 
   idsFor(userId: string): string[] {

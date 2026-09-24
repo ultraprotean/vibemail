@@ -3,6 +3,7 @@
     "@supabase/supabase-js": "^2.117.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.13.6",
+    "@vercel/functions": "^3.9.9",
     "googleapis": "^181.0.0",
     "jsonwebtoken": "^9.0.3",
     "ts-node": "^10.9.2",
