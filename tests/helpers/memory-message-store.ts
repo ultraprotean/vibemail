@@ -17,6 +17,16 @@ export class MemoryMessageStore implements MessageStore {
     for (const id of ids) this.rows.delete(this.key(userId, id));
   }
 
+  async getMessageLabels(userId: string, id: string): Promise<string[] | null> {
+    return this.rows.get(this.key(userId, id))?.labels ?? null;
+  }
+
+  async setMessageLabels(userId: string, id: string, labels: string[]): Promise<void> {
+    const row = this.rows.get(this.key(userId, id));
+    // Mirrors the generated is_read column.
+    if (row) Object.assign(row, { labels, isRead: !labels.includes('UNREAD') });
+  }
+
   idsFor(userId: string): string[] {
     return [...this.rows.values()].filter((r) => r.userId === userId).map((r) => r.id).sort();
   }

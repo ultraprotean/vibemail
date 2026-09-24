@@ -69,4 +69,33 @@ export class SupabaseMessageStore implements MessageStore {
       throw new Error(`Failed to delete messages: ${error.message}`);
     }
   }
+
+  async getMessageLabels(userId: string, id: string): Promise<string[] | null> {
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select('label_ids')
+      .eq('user_id', userId)
+      .eq('id', id)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Failed to read message: ${error.message}`);
+    }
+    const row: unknown = data;
+    if (row === null) return null;
+    if (typeof row !== 'object' || !('label_ids' in row)) {
+      throw new Error('Unexpected messages row shape');
+    }
+    const labels: unknown = row.label_ids;
+    if (!Array.isArray(labels) || !labels.every((l): l is string => typeof l === 'string')) {
+      throw new Error('messages.label_ids is not a string array');
+    }
+    return labels;
+  }
+
+  async setMessageLabels(userId: string, id: string, labels: string[]): Promise<void> {
+    const { error } = await this.client.from(TABLE).update({ label_ids: labels }).eq('user_id', userId).eq('id', id);
+    if (error) {
+      throw new Error(`Failed to update message labels: ${error.message}`);
+    }
+  }
 }

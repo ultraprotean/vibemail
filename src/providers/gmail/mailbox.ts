@@ -2,11 +2,16 @@ import type { MailboxClient } from '../../types/provider';
 import type { GmailAuth } from './auth';
 import { GmailHistoryReader, gmailHistoryApi } from './history';
 import { GmailMessageReader, gmailMessagesApi } from './messages';
+import { GmailReadState, gmailModifyApi } from './read-state';
+import { GmailSender, gmailSendApi } from './send';
 
-/** The mailbox operations implemented so far (units 3–4); send and read-state come in unit 5. */
+/**
+ * Every mailbox operation the endpoints use. (`watchMailbox` goes through `GmailAuth`,
+ * and `refreshAccessToken` is `GmailAuth.refreshAccessToken`.)
+ */
 export type GmailSyncMailbox = Pick<
   MailboxClient,
-  'listMessages' | 'getMessage' | 'listChangesSince' | 'getCurrentCursor'
+  'listMessages' | 'getMessage' | 'listChangesSince' | 'getCurrentCursor' | 'sendMessage' | 'setReadState'
 >;
 
 export interface ConnectedMailbox {
@@ -24,12 +29,16 @@ export async function connectGmailMailbox(auth: GmailAuth, googleId: string): Pr
   const { client, persistence } = await auth.authorizedClient(googleId);
   const messages = new GmailMessageReader(gmailMessagesApi(client));
   const history = new GmailHistoryReader(gmailHistoryApi(client));
+  const sender = new GmailSender(gmailSendApi(client));
+  const readState = new GmailReadState(gmailModifyApi(client));
   return {
     mailbox: {
       listMessages: (opts) => messages.listMessages(opts),
       getMessage: (id) => messages.getMessage(id),
       listChangesSince: (cursor) => history.listChangesSince(cursor),
       getCurrentCursor: () => history.getCurrentCursor(),
+      sendMessage: (input) => sender.sendMessage(input),
+      setReadState: (id, isRead) => readState.setReadState(id, isRead),
     },
     settled: () => persistence.settled(),
   };

@@ -12,7 +12,7 @@
 // Tokens
 // ---------------------------------------------------------------------------
 
-/** OAuth tokens as held by our system (stored encrypted in the `account` row, §4). */
+/** OAuth tokens as held by our system (stored encrypted in the user's `users` row, §4). */
 export interface ProviderTokens {
   accessToken: string;
   /** Null only if the provider issued none; §6.1 forces consent so one is always requested. */
@@ -220,9 +220,10 @@ export interface MailboxClient {
 
   /**
    * §6.5 — Mark a message read or unread in the provider.
+   * @returns the message's labels after the change, as the provider reports them.
    * @throws ProviderError `NOT_FOUND` if the message no longer exists.
    */
-  setReadState(id: string, isRead: boolean): Promise<void>;
+  setReadState(id: string, isRead: boolean): Promise<{ labels: string[] }>;
 
   /**
    * §6.2 step 3 and §6.7 — Register push notifications for this mailbox, or renew an

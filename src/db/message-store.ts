@@ -14,4 +14,10 @@ export interface MessageStore {
 
   /** Delete one user's messages by id. Ids that aren't stored are ignored. */
   deleteMessages(userId: string, ids: string[]): Promise<void>;
+
+  /** One user's stored labels for a message, or null if that user has no such message. */
+  getMessageLabels(userId: string, id: string): Promise<string[] | null>;
+
+  /** Replace a stored message's labels (`is_read` follows, being generated from them). */
+  setMessageLabels(userId: string, id: string, labels: string[]): Promise<void>;
 }
