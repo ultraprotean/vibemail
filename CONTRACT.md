@@ -19,7 +19,7 @@ The project is complete when all of the following hold:
 
 ## 2. Conventions
 
-- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/cron/renew-watch`), which live outside `/api/v1`.
+- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/api/cron/renew-watch`), which live outside `/api/v1`.
 - Authentication: JWT Bearer on every endpoint except `GET /auth/google`, `GET /auth/google/callback`, the webhook (shared-secret token, §6.6) and the cron (cron secret, §6.7).
 - Content type: `application/json` for all request/response bodies except the OAuth endpoints, the Pub/Sub webhook, and the cron.
 - CORS: the three JWT-authenticated routes (§6.3–6.5) answer `OPTIONS` preflights and send `Access-Control-Allow-Origin: <FRONTEND_URL>` (that origin only, allowing the `Authorization` and `Content-Type` headers). No cookies cross origins; the session is a Bearer token.
@@ -296,13 +296,13 @@ Processing must be idempotent (Pub/Sub may still redeliver); every write above i
 | 204 | — | malformed Pub/Sub envelope or undecodable `data`: logged and **acknowledged**, because redelivering a message that can never be parsed would retry forever |
 | 401 | `UNAUTHORIZED` | `token` query param missing or mismatched (redelivered until the configuration is fixed) |
 
-### 6.7 `GET /cron/renew-watch`
+### 6.7 `GET /api/cron/renew-watch`
 
-Invoked daily by Vercel Cron. Google stops push notifications if `users.watch()` isn't renewed at least every 7 days; Google recommends renewing daily.
+Invoked by Vercel Cron daily at 06:00 UTC (`vercel.json` `crons`: `0 6 * * *`). `/cron/renew-watch` is rewritten to the same function. Google stops push notifications if `users.watch()` isn't renewed at least every 7 days.
 
 **Request:** header `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically when `CRON_SECRET` is set). No params.
 
-**Behavior:** for every user, calls `users.watch()` again with the same topic and updates that user's `watch_expiration`. `last_history_id` is not changed. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
+**Behavior:** for every user whose `watch_expiration` is within the next 24 hours (including already past), or who has no watch at all (e.g. `watch()` failed at sign-in), calls `users.watch()` again with the same topic and updates that user's `watch_expiration`. `last_history_id` is not changed. With a daily run and a 7-day watch, each watch gets one renewal attempt, on its last day; if that attempt fails the watch lapses for at most a day, and the next run (which includes past expiries) re-registers it. Changes in that gap aren't lost: the next notification reads forward from the unchanged watermark. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
 
 **Success response:** `200 OK`, even if some users failed (the per-user results are the signal):
 ```json
