@@ -4,8 +4,9 @@
 
 The project is complete when all of the following hold:
 
+- [ ] Multiple Google accounts can connect; each user sees and acts on only their own mailbox.
 - [ ] Gmail OAuth completes end-to-end and encrypted tokens persist in Supabase.
-- [ ] First authentication triggers an initial sync of the 50 most recent messages.
+- [ ] A user's first authentication triggers an initial sync of their 50 most recent messages.
 - [ ] New messages and read-state changes arrive via Gmail Pub/Sub push notifications — no polling.
 - [ ] The Gmail watch is renewed daily by cron (§6.7), so push notifications don't lapse after Google's 7-day limit.
 - [ ] Expired history (`history.list` 404) triggers a full resync rather than a failure loop.
@@ -21,9 +22,9 @@ The project is complete when all of the following hold:
 - Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/cron/renew-watch`), which live outside `/api/v1`.
 - Authentication: JWT Bearer on every endpoint except `GET /auth/google`, `GET /auth/google/callback`, the webhook (shared-secret token, §6.6) and the cron (cron secret, §6.7).
 - Content type: `application/json` for all request/response bodies except the OAuth endpoints, the Pub/Sub webhook, and the cron.
-- OAuth scopes requested: `https://www.googleapis.com/auth/gmail.modify` (covers read, label changes, send, `watch`, `history.list`) plus `openid email` (account email). No other Gmail scope is needed.
+- OAuth scopes requested: `https://www.googleapis.com/auth/gmail.modify` (covers read, label changes, send, `watch`, `history.list`) plus `openid email` (the ID token's `sub` becomes `google_id` and its `email` becomes `users.email`). No other Gmail scope is needed.
 - Gmail identifiers: `id`, `threadId`, `historyId` and `internalDate` arrive from Gmail as strings. Application code keeps `historyId` as a string end to end; it is stored as `bigint` but must never pass through a JS `number` (precision loss above 2^53).
-- Session: after successful OAuth, the client receives a JWT and must send it as an `Authorization: Bearer <jwt>` header on every authenticated request. It expires after 1 hour; once expired, requests fail with `AUTH_FAILED` (`recoverable: true`) and the client re-runs the OAuth flow to obtain a fresh token.
+- Session: after successful OAuth, the client receives a JWT whose `sub` claim is the user's `users.id`, and must send it as an `Authorization: Bearer <jwt>` header on every authenticated request. Every authenticated endpoint acts only on that user's data. The JWT expires after 1 hour; once expired, requests fail with `AUTH_FAILED` (`recoverable: true`) and the client re-runs the OAuth flow to obtain a fresh token.
 - Error envelope (all endpoints):
   ```json
   { "error": { "code": "STRING_CODE", "message": "human-readable", "details": { "...": "optional, error-specific" } } }
@@ -45,13 +46,18 @@ Every endpoint that requires a valid session uses one error code for all authent
 
 **Token persistence rule.** Google issues a refresh token only on a consent that uses `access_type=offline`, and only reliably when `prompt=consent` forces the consent screen (§6.1). When the OAuth2 client refreshes, the `tokens` event it emits carries a new `access_token` and `expiry_date` but **no `refresh_token`**. The persistence listener must therefore merge: always update `access_token_enc` and `token_expires_at`, and update `refresh_token_enc` only when a non-empty `refresh_token` is present. It must never overwrite a stored refresh token with null.
 
-## 4. Data Model — Stored Message
+## 4. Data Model
 
-Table: `messages`. One row per Gmail message, populated by the sync process (initial backfill + Pub/Sub-triggered incremental sync).
+This is a **multi-user** system: any number of Google accounts can connect, one `users` row each, and every message belongs to exactly one user.
+
+### Table: `messages`
+
+One row per Gmail message per user, populated by the sync process (initial backfill + Pub/Sub-triggered incremental sync). Gmail message ids are only unique within one mailbox, so the primary key is `(user_id, id)`.
 
 | Field | Type | Source in Gmail API `messages.get` response |
 |---|---|---|
-| `id` | `text` (PK) | `message.id` |
+| `user_id` | `uuid`, FK → `users.id` (`on delete cascade`) | the mailbox being synced, not from Gmail |
+| `id` | `text` (PK with `user_id`) | `message.id` |
 | `threadId` | `text` | `message.threadId` |
 | `subject` | `text` | `payload.headers[name="Subject"].value` |
 | `from` | `text` | `payload.headers[name="From"].value` |
@@ -70,18 +76,32 @@ Attachments are explicitly **out of scope** for this model (send has no attachme
 
 Messages deleted in Gmail (`history.list` → `messagesDeleted`) are deleted from `messages`. Trashing is a label change (`TRASH`) and is handled like any other label update.
 
-Table: `account` (singleton — this is a single-user system, exactly one row):
+### Table: `users`
+
+One row per connected Google account. Re-consent by the same account updates its existing row: writes upsert **on conflict `google_id`**.
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | fixed singleton key | e.g. always `1` |
-| `email` | `text` | from Google profile/userinfo at OAuth time |
-| `access_token_enc` | `bytea` | encrypted via pgcrypto/pgsodium |
-| `refresh_token_enc` | `bytea` | encrypted via pgcrypto/pgsodium |
-| `token_expires_at` | `timestamptz` | |
-| `last_history_id` | `bigint` | Gmail mailbox historyId watermark; incremental sync resumes from here. Initial value: the `historyId` returned by `users.watch()`, captured **before** the backfill starts, so changes arriving during the backfill are replayed rather than missed (replays are safe because sync is idempotent). |
-| `watch_expiration` | `timestamptz` | Gmail `users.watch()` expiration (epoch ms, converted). Google requires renewal at least every 7 days; the cron in §6.7 renews it daily. |
+| `id` | `uuid` PK, default `gen_random_uuid()` | our user id; the JWT `sub` (§2) |
+| `google_id` | `text`, unique, not null | ID token `sub` claim: Google's stable account id (an email address can change, this can't) |
+| `email` | `text`, not null | ID token `email` claim at OAuth time; used to route webhook notifications (§6.6) |
+| `access_token_enc` | `bytea`, not null | encrypted, see "Token encryption" below |
+| `refresh_token_enc` | `bytea`, nullable | encrypted; follows the §3 merge rule (never overwritten with null) |
+| `token_expires_at` | `timestamptz`, not null | |
+| `last_history_id` | `bigint`, nullable | Gmail mailbox historyId watermark; incremental sync resumes from here. Initial value: the `historyId` returned by `users.watch()`, captured **before** the backfill starts, so changes arriving during the backfill are replayed rather than missed (replays are safe because sync is idempotent). |
+| `watch_expiry` | `timestamptz`, nullable | Gmail `users.watch()` expiration (epoch ms, converted). Google requires renewal at least every 7 days; the cron in §6.7 renews it daily. |
 | `created_at` / `updated_at` | `timestamptz` | |
+
+Gmail's `watch()` response has no resource or channel id (unlike Drive and Calendar watch channels), so there is nothing else to store for a watch.
+
+### Token encryption
+
+Tokens are encrypted **in the application** before they reach Supabase, never in SQL, so the key never enters the database:
+
+- Algorithm: AES-256-GCM (Node `crypto`), a fresh random 12-byte IV per encryption, 16-byte auth tag.
+- Stored layout in the `bytea` column: `iv (12 bytes) ‖ authTag (16 bytes) ‖ ciphertext`.
+- Key: `ENCRYPTION_KEY`, exactly 32 bytes, given as 64 hex characters or as base64. The app refuses to start with a key of the wrong length.
+- A failed auth-tag check on decrypt is treated as corrupt data (`INTERNAL_ERROR`), never as an auth failure.
 
 ## 5. Sequencing rule (two-session build)
 
@@ -91,7 +111,7 @@ Logic ships before schema merges. The two sessions run in parallel, not strictly
 Implement all endpoint handlers in §6, the Gmail API client wrapper, token encrypt/decrypt helpers, JWT issue/verify, and Pub/Sub payload parsing, all behind a persistence *interface*. This session establishes what storage actually needs to look like. Session 1 is done only when every endpoint's success path and every typed error case in this document has a passing Jest test, and the full suite is green with zero skipped tests, run against live Supabase (the verification gate — see BUILD_SEQUENCE.md unit 7).
 
 **Session 2 — schema:**
-Design the actual Supabase schema (`account`, `messages` tables above) and write the SQL migration (including pgcrypto/pgsodium setup) in parallel with Session 1. The schema may be applied to a real database early — Session 1's suite needs somewhere live to run against — but it is not reviewed or merged as the accepted schema until Session 1's verification gate passes.
+Design the actual Supabase schema (`users`, `messages` tables above) and write the SQL migration in parallel with Session 1. No database-side encryption extension is needed: tokens arrive already encrypted (§4). The schema may be applied to a real database early — Session 1's suite needs somewhere live to run against — but it is not reviewed or merged as the accepted schema until Session 1's verification gate passes.
 
 ## 6. Endpoint Contracts
 
@@ -123,9 +143,10 @@ OAuth redirect target from Google.
 
 Side effects, in order:
 1. Exchange `code` for tokens and check the granted scopes include `gmail.modify` (users can approve only some of the requested scopes).
-2. Fetch the account email, encrypt the tokens, and upsert the singleton `account` row (applying the §3 merge rule to `refresh_token_enc`).
-3. Register `users.watch()` on `GOOGLE_PUBSUB_TOPIC`; store its `expiration` as `watch_expiration` and its `historyId` as `last_history_id`.
-4. Run the initial backfill of the 50 most recent messages (`messages.list` with `maxResults=50`, then `messages.get` with `format=full` for each), upserting by `id`.
+2. Verify the returned ID token and read its `sub` (→ `google_id`) and `email`. Encrypt the tokens and upsert the `users` row on conflict `google_id` (applying the §3 merge rule to `refresh_token_enc`).
+3. Register `users.watch()` on `GOOGLE_PUBSUB_TOPIC`; store its `expiration` as `watch_expiry` and its `historyId` as `last_history_id`.
+4. Run the initial backfill of that user's 50 most recent messages (`messages.list` with `maxResults=50`, then `messages.get` with `format=full` for each), upserting by `(user_id, id)`.
+5. Issue a JWT with `sub` = `users.id`.
 
 **Errors:**
 | Status | Code | recoverable | When |
@@ -157,7 +178,7 @@ Side effects, in order:
   "nextCursor": "string|null"
 }
 ```
-Sorted `receivedAt` descending (newest first).
+Returns only messages whose `user_id` is the JWT's `sub`. Sorted `receivedAt` descending (newest first).
 
 **Errors:**
 | Status | Code | Notes |
@@ -202,7 +223,7 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 ### 6.5 `PATCH /messages/:id/read`
 
 **Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). No body.
-Behavior: calls Gmail `messages.modify` to remove the `UNREAD` label first; only on success updates the local `messages` row's `isRead`.
+Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label; only on success updates the local `messages` row's `isRead`.
 
 **Success response:** `200 OK`
 ```json
@@ -213,7 +234,7 @@ Behavior: calls Gmail `messages.modify` to remove the `UNREAD` label first; only
 | Status | Code | Notes |
 |---|---|---|
 | 401 | `AUTH_FAILED` | see §3 |
-| 404 | `NOT_FOUND` | message id not present in local store |
+| 404 | `NOT_FOUND` | message id not present in this user's messages (another user's message id is also a 404, never a 403, so ids don't leak across users) |
 | 502 | `PROVIDER_ERROR` | Gmail's `messages.modify` call failed — local row is NOT updated |
 | 500 | `INTERNAL_ERROR` | unexpected failure |
 
@@ -238,12 +259,14 @@ Other envelope fields (`attributes`, `message_id`, `publish_time`, `deliveryAtte
 
 **Processing is synchronous.** The handler finishes all sync work *before* responding. Serverless functions don't reliably run work after the response is sent, and a failure must still be able to return 500 so Pub/Sub retries. The notification's `historyId` only signals that something changed; the sync always reads forward from the stored watermark:
 
-1. If `emailAddress` doesn't match `account.email` (or no account row exists), acknowledge with `204` and do nothing.
-2. Call `history.list` with `startHistoryId = account.last_history_id`, following `nextPageToken` until exhausted.
-3. Apply records: `messagesAdded` → `messages.get` (`format=full`) and upsert; `labelsAdded`/`labelsRemoved` → update `labelIds` and `isRead`; `messagesDeleted` → delete the row. If `messages.get` returns 404 (the message was deleted since the record was written), skip it.
-4. Set `account.last_history_id` to the `historyId` of the final `history.list` response, but only if it is greater than the stored value (a redelivered older notification must never move the watermark backwards).
+1. Find the user whose `users.email` equals `emailAddress`. If there is none, acknowledge with `204` and do nothing.
+2. Using that user's tokens, call `history.list` with `startHistoryId = users.last_history_id`, following `nextPageToken` until exhausted.
+3. Apply records to that user's messages only: `messagesAdded` → `messages.get` (`format=full`) and upsert; `labelsAdded`/`labelsRemoved` → update `labelIds` and `isRead`; `messagesDeleted` → delete the row. If `messages.get` returns 404 (the message was deleted since the record was written), skip it.
+4. Set the user's `last_history_id` to the `historyId` of the final `history.list` response, but only if it is greater than the stored value (a redelivered older notification must never move the watermark backwards).
 
-**History expired.** If `history.list` returns `404` (Google keeps history for about a week, sometimes only hours), run a full resync instead: fetch the current mailbox `historyId` via `users.getProfile`, re-run the 50-message backfill from §6.2, then store that `historyId` as `last_history_id`. This is a success path, not an error.
+**History expired.** If `history.list` returns `404` (Google keeps history for about a week, sometimes only hours), run a full resync for that user instead: fetch the current mailbox `historyId` via `users.getProfile`, re-run the 50-message backfill from §6.2, then store that `historyId` as `last_history_id`. This is a success path, not an error.
+
+**Dead refresh token.** If the user's refresh token is rejected (`invalid_grant`), acknowledge with `204`: nothing can succeed until that user re-consents, and redelivery would retry forever.
 
 Processing must be idempotent (Pub/Sub may redeliver); every write above is an upsert, a delete, or a monotonic watermark update.
 
@@ -262,17 +285,15 @@ Invoked daily by Vercel Cron. Google stops push notifications if `users.watch()`
 
 **Request:** header `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically when `CRON_SECRET` is set). No params.
 
-**Behavior:** calls `users.watch()` again with the same topic and updates `account.watch_expiration`. `last_history_id` is not changed. If no account row exists, does nothing and returns `204`.
+**Behavior:** for every user, calls `users.watch()` again with the same topic and updates that user's `watch_expiry`. `last_history_id` is not changed. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
 
-**Success response:** `200 OK`
+**Success response:** `200 OK`, even if some users failed (the per-user results are the signal):
 ```json
-{ "watchExpiration": "2026-01-08T00:00:00.000Z" }
+{ "renewed": 3, "skippedAuthRevoked": 1, "failed": 0 }
 ```
 
 **Errors:**
 | Status | Code | Notes |
 |---|---|---|
 | 401 | `UNAUTHORIZED` | missing or wrong cron secret |
-| 401 | `AUTH_FAILED` (`recoverable: false`) | refresh token dead; the watch lapses until the user re-consents |
-| 502 | `PROVIDER_ERROR` | `watch()` call failed |
-| 500 | `INTERNAL_ERROR` | unexpected failure |
+| 500 | `INTERNAL_ERROR` | the user list itself couldn't be read |
