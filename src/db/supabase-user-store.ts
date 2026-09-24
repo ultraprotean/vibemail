@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   EncryptedTokenUpdate,
   StoredUserTokens,
+  SyncUser,
   UpsertUserInput,
   UserStore,
   WatchState,
@@ -137,5 +138,48 @@ export class SupabaseUserStore implements UserStore {
     if (error) {
       throw new Error(`Failed to save watch: ${error.message}`);
     }
+  }
+
+  async findUserByEmail(email: string): Promise<SyncUser | null> {
+    const { data, error } = await this.client
+      .from(TABLE)
+      // Cast to text so the bigint never passes through a JS number (CONTRACT.md §2).
+      .select('id, google_id, last_history_id::text')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Failed to find user by email: ${error.message}`);
+    }
+    const row: unknown = data;
+    if (row === null) {
+      return null;
+    }
+    if (!isRecord(row)) {
+      throw new Error('Unexpected users row shape');
+    }
+    const lastHistoryId = row.last_history_id;
+    return {
+      userId: requireString(row, 'id'),
+      googleId: requireString(row, 'google_id'),
+      lastHistoryId: typeof lastHistoryId === 'string' ? lastHistoryId : null,
+    };
+  }
+
+  async advanceHistoryId(userId: string, historyId: string): Promise<boolean> {
+    // The value is interpolated into a PostgREST filter, so accept digits only.
+    if (!/^\d+$/.test(historyId)) {
+      throw new Error(`Invalid historyId: ${historyId}`);
+    }
+    const { data, error } = await this.client
+      .from(TABLE)
+      .update({ last_history_id: historyId, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .or(`last_history_id.is.null,last_history_id.lt.${historyId}`)
+      .select('id');
+    if (error) {
+      throw new Error(`Failed to advance history id: ${error.message}`);
+    }
+    const rows: unknown = data;
+    return Array.isArray(rows) && rows.length > 0;
   }
 }

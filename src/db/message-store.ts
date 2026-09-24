@@ -11,4 +11,7 @@ export interface MessageStore {
    * re-syncing the same message overwrites it with the latest provider state.
    */
   upsertMessages(userId: string, messages: ProviderMessage[], syncedAt: Date): Promise<void>;
+
+  /** Delete one user's messages by id. Ids that aren't stored are ignored. */
+  deleteMessages(userId: string, ids: string[]): Promise<void>;
 }

@@ -32,6 +32,14 @@ export interface WatchState {
   watchExpiry: Date;
 }
 
+/** The user a webhook notification belongs to (CONTRACT.md §6.6 step 1). */
+export interface SyncUser {
+  userId: string;
+  googleId: string;
+  /** Kept as a string (CONTRACT.md §2); null before the first watch registration. */
+  lastHistoryId: string | null;
+}
+
 export interface UserStore {
   /**
    * Insert or update the user on conflict `google_id` (§6.2 step 2).
@@ -46,4 +54,15 @@ export interface UserStore {
 
   /** Store the result of `users.watch()` (§6.2 step 3). */
   saveWatch(googleId: string, watch: WatchState): Promise<void>;
+
+  /** §6.6 step 1 — The user whose mailbox a notification is for, by email. */
+  findUserByEmail(email: string): Promise<SyncUser | null>;
+
+  /**
+   * §6.6 step 4 — Move `last_history_id` forward to `historyId`, only if it is greater
+   * than the stored value (or none is stored). Done as one conditional update, so it can
+   * never move backwards, even under concurrent syncs.
+   * @returns whether the watermark moved.
+   */
+  advanceHistoryId(userId: string, historyId: string): Promise<boolean>;
 }

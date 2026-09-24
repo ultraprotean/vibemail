@@ -61,4 +61,12 @@ export class SupabaseMessageStore implements MessageStore {
       throw new Error(`Failed to upsert messages: ${error.message}`);
     }
   }
+
+  async deleteMessages(userId: string, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await this.client.from(TABLE).delete().eq('user_id', userId).in('id', ids);
+    if (error) {
+      throw new Error(`Failed to delete messages: ${error.message}`);
+    }
+  }
 }

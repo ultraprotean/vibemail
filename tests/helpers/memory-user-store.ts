@@ -1,6 +1,7 @@
 import type {
   EncryptedTokenUpdate,
   StoredUserTokens,
+  SyncUser,
   UpsertUserInput,
   UserStore,
   WatchState,
@@ -9,6 +10,7 @@ import type {
 interface MemoryUserRow extends StoredUserTokens {
   email: string;
   watch: WatchState | null;
+  lastHistoryId: string | null;
 }
 
 /**
@@ -29,6 +31,7 @@ export class MemoryUserStore implements UserStore {
       refreshTokenEnc: input.refreshTokenEnc ?? existing?.refreshTokenEnc ?? null,
       tokenExpiresAt: input.tokenExpiresAt,
       watch: existing?.watch ?? null,
+      lastHistoryId: existing?.lastHistoryId ?? null,
     };
     this.rows.set(input.googleId, row);
     return { userId: row.userId };
@@ -48,6 +51,29 @@ export class MemoryUserStore implements UserStore {
 
   async saveWatch(googleId: string, watch: WatchState): Promise<void> {
     const row = this.rows.get(googleId);
-    if (row) row.watch = watch;
+    if (row) {
+      row.watch = watch;
+      row.lastHistoryId = watch.lastHistoryId;
+    }
+  }
+
+  async findUserByEmail(email: string): Promise<SyncUser | null> {
+    for (const row of this.rows.values()) {
+      if (row.email === email) {
+        return { userId: row.userId, googleId: row.googleId, lastHistoryId: row.lastHistoryId };
+      }
+    }
+    return null;
+  }
+
+  async advanceHistoryId(userId: string, historyId: string): Promise<boolean> {
+    for (const row of this.rows.values()) {
+      if (row.userId !== userId) continue;
+      // BigInt comparison, like the bigint column: never through a JS number.
+      if (row.lastHistoryId !== null && BigInt(historyId) <= BigInt(row.lastHistoryId)) return false;
+      row.lastHistoryId = historyId;
+      return true;
+    }
+    return false;
   }
 }

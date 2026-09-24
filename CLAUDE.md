@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1 (provider interface, `src/types/provider.ts`) and 2 (Gmail OAuth, `src/providers/gmail/auth.ts`, token encryption in `src/crypto/`, user store in `src/db/`) are done; unit 3 (message normalization in `src/providers/gmail/messages.ts`, initial sync in `src/sync/`, message store in `src/db/`) is in progress. No `api/` entry points exist yet. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
+Build progress: units 1–3 are done (provider interface in `src/types/provider.ts`; Gmail OAuth in `src/providers/gmail/auth.ts` with token encryption in `src/crypto/`; message normalization in `src/providers/gmail/messages.ts` and initial sync in `src/sync/`; user and message stores in `src/db/`). Unit 4 (Pub/Sub webhook, `src/webhook/gmail.ts`, with the Gmail history reader in `src/providers/gmail/history.ts`) is in progress; watch renewal (`/cron/renew-watch`) is still to do. No `api/` entry points exist yet. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
 
 ## Stack
 

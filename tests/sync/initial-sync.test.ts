@@ -38,6 +38,7 @@ function recordingStore() {
     upsertMessages: async (userId, messages, syncedAt) => {
       upserts.push({ userId, ids: messages.map((m) => m.id), syncedAt });
     },
+    deleteMessages: async () => undefined,
   };
   return { store, upserts };
 }
@@ -95,6 +96,7 @@ describe('runInitialSync', () => {
       upsertMessages: async () => {
         throw new Error('db down');
       },
+      deleteMessages: async () => undefined,
     };
     await expect(runInitialSync('user-1', { mailbox: fakeMailbox(5, 5), store })).rejects.toThrow('db down');
   });
