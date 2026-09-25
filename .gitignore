@@ -11,3 +11,6 @@ supabase/.temp/
 next-env.d.ts
 *.tsbuildinfo
 .DS_Store
+# Postman local-files workspace mirror (canonical collection: docs/vibemail-api.postman_collection.json)
+/postman/
+/.postman/
