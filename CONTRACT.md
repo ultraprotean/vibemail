@@ -19,9 +19,10 @@ The project is complete when all of the following hold:
 
 ## 2. Conventions
 
-- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/cron/renew-watch`), which live outside `/api/v1`.
+- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/api/cron/renew-watch`), which live outside `/api/v1`.
 - Authentication: JWT Bearer on every endpoint except `GET /auth/google`, `GET /auth/google/callback`, the webhook (shared-secret token, §6.6) and the cron (cron secret, §6.7).
 - Content type: `application/json` for all request/response bodies except the OAuth endpoints, the Pub/Sub webhook, and the cron.
+- CORS: the three JWT-authenticated routes (§6.3–6.5) answer `OPTIONS` preflights and send `Access-Control-Allow-Origin: <FRONTEND_URL>` (that origin only, allowing the `Authorization` and `Content-Type` headers). No cookies cross origins; the session is a Bearer token.
 - OAuth scopes requested: `https://www.googleapis.com/auth/gmail.modify` (covers read, label changes, send, `watch`, `history.list`) plus `openid email` (the ID token's `sub` becomes `google_id` and its `email` becomes `users.email`). No other Gmail scope is needed.
 - Gmail identifiers: `id`, `threadId`, `historyId` and `internalDate` arrive from Gmail as strings. Application code keeps `historyId` as a string end to end; it is stored as `bigint` but must never pass through a JS `number` (precision loss above 2^53).
 - Session: after successful OAuth, the client receives a JWT whose `sub` claim is the user's `users.id`, and must send it as an `Authorization: Bearer <jwt>` header on every authenticated request. Every authenticated endpoint acts only on that user's data. The JWT expires after 1 hour; once expired, requests fail with `AUTH_FAILED` (`recoverable: true`) and the client re-runs the OAuth flow to obtain a fresh token.
@@ -129,7 +130,7 @@ Starts the OAuth flow. Not session-authenticated; this is where clients are sent
 
 **Request:** no params.
 
-**Success response:** `302 Found` to Google's consent URL, built by the OAuth2 client's `generateAuthUrl` with `access_type=offline`, `prompt=consent`, the scopes from §2, and a random `state`. The same `state` is set in an `oauth_state` cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, 10-minute max-age) so the callback can verify it without server-side storage.
+**Success response:** `302 Found` to Google's consent URL, built by the OAuth2 client's `generateAuthUrl` with `access_type=offline`, `prompt=consent`, the scopes from §2, and a random `state`. The same `state` is set in an `oauth_state` cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/api/v1/auth`, 10-minute max-age) so the callback can verify it without server-side storage.
 
 **Errors:**
 | Status | Code | Notes |
@@ -159,7 +160,7 @@ Side effects, in order:
 **Errors:**
 | Status | Code | recoverable | When |
 |---|---|---|---|
-| 400 | `AUTH_FAILED` | `true` | missing `code`, missing or mismatched `state`, any `error` param from Google, `invalid_grant` on code exchange (code expired or already used), or `gmail.modify` not granted — the user can retry the flow |
+| 400 | `AUTH_FAILED` | `true` | missing `code`, missing or mismatched `state`, any `error` param from Google, `invalid_grant` on code exchange (code expired or already used), `gmail.modify` not granted, or a first-time user for whom Google issued no refresh token — the user can retry the flow |
 | 502 | `AUTH_FAILED` | `false` | Google's token endpoint returned any other error (outage, misconfigured client) |
 | 502 | `PROVIDER_ERROR` | — | tokens were saved but `watch()` or the backfill failed; retrying the flow repeats both safely |
 
@@ -210,7 +211,7 @@ Returns only messages whose `user_id` is the JWT's `sub`. Sorted `receivedAt` de
   "inReplyTo": "string"
 }
 ```
-`to`, `subject`, and at least one of `bodyText`/`bodyHtml` are required; `cc`, `bcc`, `threadId`, `inReplyTo` are optional (the latter two support replying within an existing thread). No attachment support.
+`to`, `subject`, and at least one of `bodyText`/`bodyHtml` are required; `cc`, `bcc`, `threadId`, `inReplyTo` are optional (the latter two support replying within an existing thread). No attachment support. For convenience, `to` may also be a single address string, and `body` is accepted as a synonym for `bodyText`.
 
 The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw` (never via the `media` upload parameter). For Gmail to place a reply in the thread, `threadId` must be set, the `In-Reply-To` and `References` headers must carry `inReplyTo`, and the `Subject` must match the thread's subject.
 
@@ -218,6 +219,8 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 ```json
 { "id": "string", "threadId": "string", "status": "sent" }
 ```
+
+After a successful send, the sent copy is fetched back with `messages.get` (the send response carries only ids), normalized like any synced message, and upserted under the user. If that fetch or upsert fails, the response is still `201`: the message has been sent, and failing would invite a duplicate retry. The webhook stores the copy later, because sending adds it to the mailbox history.
 
 **Errors:**
 | Status | Code | Notes |
@@ -230,8 +233,8 @@ The message is built as RFC 2822 and sent base64url-encoded in `requestBody.raw`
 
 ### 6.5 `PATCH /messages/:id/read`
 
-**Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). No body.
-Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label; only on success removes `UNREAD` from the local row's `label_ids` (`is_read` is generated from it, §4).
+**Request** — requires `Authorization: Bearer <jwt>` header. Path param `id` (Gmail message id). Optional JSON body `{ "isRead": false }` marks the message **unread** instead; with no body (or `"isRead": true`) it is marked read.
+Behavior: looks the message up by `(user_id = JWT sub, id)`; then calls Gmail `messages.modify` with that user's tokens to remove the `UNREAD` label (or add it, for unread); only on success replaces the local row's `label_ids` with the labels Gmail returns (`is_read` is generated from them, §4).
 
 **Success response:** `200 OK`
 ```json
@@ -293,13 +296,13 @@ Processing must be idempotent (Pub/Sub may still redeliver); every write above i
 | 204 | — | malformed Pub/Sub envelope or undecodable `data`: logged and **acknowledged**, because redelivering a message that can never be parsed would retry forever |
 | 401 | `UNAUTHORIZED` | `token` query param missing or mismatched (redelivered until the configuration is fixed) |
 
-### 6.7 `GET /cron/renew-watch`
+### 6.7 `GET /api/cron/renew-watch`
 
-Invoked daily by Vercel Cron. Google stops push notifications if `users.watch()` isn't renewed at least every 7 days; Google recommends renewing daily.
+Invoked by Vercel Cron daily at 06:00 UTC (`vercel.json` `crons`: `0 6 * * *`). `/cron/renew-watch` is rewritten to the same function. Google stops push notifications if `users.watch()` isn't renewed at least every 7 days.
 
 **Request:** header `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically when `CRON_SECRET` is set). No params.
 
-**Behavior:** for every user, calls `users.watch()` again with the same topic and updates that user's `watch_expiration`. `last_history_id` is not changed. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
+**Behavior:** for every user whose `watch_expiration` is within the next 24 hours (including already past), or who has no watch at all (e.g. `watch()` failed at sign-in), calls `users.watch()` again with the same topic and updates that user's `watch_expiration`. `last_history_id` is not changed. With a daily run and a 7-day watch, each watch gets one renewal attempt, on its last day; if that attempt fails the watch lapses for at most a day, and the next run (which includes past expiries) re-registers it. Changes in that gap aren't lost: the next notification reads forward from the unchanged watermark. Users are processed independently: one user's failure never stops the others. A user whose refresh token is dead is skipped (their watch lapses until they re-consent).
 
 **Success response:** `200 OK`, even if some users failed (the per-user results are the signal):
 ```json
