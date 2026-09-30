@@ -4,6 +4,7 @@ import {
   authCallbackHandler,
   authStartHandler,
   gmailWebhookHandler,
+  healthHandler,
   listMessagesHandler,
   markReadHandler,
   messageIdFromPath,
@@ -463,6 +464,16 @@ describe('GET /api/cron/renew-watch', () => {
     const { deps, users } = await setup();
     jest.spyOn(users, 'findUsersWithWatchDue').mockRejectedValueOnce(new Error('db down'));
     await expectEnvelope(await cron(deps, 'Bearer cron-secret'), 500, 'INTERNAL_ERROR');
+  });
+});
+
+describe('GET / (health)', () => {
+  it('answers 200 JSON without needing any dependencies', async () => {
+    const res = await healthHandler()(new Request(`${BASE}/api/health`));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/json');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toEqual({ status: 'ok', service: 'vibemail-api' });
   });
 });
 

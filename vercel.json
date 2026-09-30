@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
   "rewrites": [
+    { "source": "/", "destination": "/api/health" },
     { "source": "/webhook/gmail", "destination": "/api/webhook/gmail" },
     { "source": "/cron/renew-watch", "destination": "/api/cron/renew-watch" }
   ],

@@ -2187,6 +2187,38 @@
           ]
         }
       ]
+    },
+    {
+      "name": "§6.8 GET / (health)",
+      "description": "Liveness check. Not authenticated, and independent of configuration, Supabase and Gmail.",
+      "item": [
+        {
+          "name": "Happy path: service is up",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('health body', () => pm.expect(pm.response.json()).to.eql({ status: 'ok', service: 'vibemail-api' }));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

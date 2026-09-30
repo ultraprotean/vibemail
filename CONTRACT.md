@@ -19,7 +19,7 @@ The project is complete when all of the following hold:
 
 ## 2. Conventions
 
-- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`) and the watch-renewal cron (`/api/cron/renew-watch`), which live outside `/api/v1`.
+- Base path: every path in §6 is relative to `/api/v1` (e.g. the OAuth callback is `/api/v1/auth/google/callback`, matching `GOOGLE_REDIRECT_URI`), except the Pub/Sub webhook (`/webhook/gmail`), the watch-renewal cron (`/api/cron/renew-watch`) and the health check (`/`, §6.8), which live outside `/api/v1`. Only files in `public/` are served statically; nothing else in the repository is reachable over HTTP.
 - Authentication: JWT Bearer on every endpoint except `GET /auth/google`, `GET /auth/google/callback`, the webhook (shared-secret token, §6.6) and the cron (cron secret, §6.7).
 - Content type: `application/json` for all request/response bodies except the OAuth endpoints, the Pub/Sub webhook, and the cron.
 - CORS: the three JWT-authenticated routes (§6.3–6.5) answer `OPTIONS` preflights and send `Access-Control-Allow-Origin: <FRONTEND_URL>` (that origin only, allowing the `Authorization` and `Content-Type` headers). No cookies cross origins; the session is a Bearer token.
@@ -314,3 +314,14 @@ Invoked by Vercel Cron daily at 06:00 UTC (`vercel.json` `crons`: `0 6 * * *`). 
 |---|---|---|
 | 401 | `UNAUTHORIZED` | missing or wrong cron secret |
 | 500 | `INTERNAL_ERROR` | the user list itself couldn't be read |
+
+### 6.8 `GET /`
+
+Liveness check, served by `api/health.ts` through a `vercel.json` rewrite. Not authenticated, and deliberately independent of configuration, Supabase and Gmail: it answers even when the rest of the API is misconfigured.
+
+**Success response:** `200 OK`, `Cache-Control: no-store`
+```json
+{ "status": "ok", "service": "vibemail-api" }
+```
+
+No error cases.

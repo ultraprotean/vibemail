@@ -309,6 +309,19 @@ export function renewWatchHandler(deps: AppDeps): Handler {
 }
 
 // ---------------------------------------------------------------------------
+// GET / (rewritten to /api/health): liveness check
+// ---------------------------------------------------------------------------
+
+/**
+ * Liveness only: answers without configuration, the database or Gmail, so it stays up
+ * even when the rest of the API is misconfigured. Reveals nothing about the deployment.
+ */
+export function healthHandler(): Handler {
+  return async () =>
+    jsonResponse(200, { status: 'ok', service: 'vibemail-api' }, { 'Cache-Control': 'no-store' });
+}
+
+// ---------------------------------------------------------------------------
 // CORS preflight
 // ---------------------------------------------------------------------------
 

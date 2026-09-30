@@ -8,7 +8,7 @@ VibeMail Engine is a data-liberation and synchronization engine: it extracts a u
 
 Gmail is the teaching vehicle for this build; the reusable pattern being taught is **Extract → Structure → Embed** — pull data out of a third-party provider's native shape, normalize it into your own schema, and expose it through your own contract. This is why a `ProviderInterface` abstraction is built before any Gmail-specific code (see BUILD_SEQUENCE.md unit 1) — Gmail is one implementation of it, not the architecture itself.
 
-Build progress: units 1–7 are built (provider interface `src/types/provider.ts`; Gmail provider `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; watch renewal cron `src/cron/renewWatch.ts`; send `src/send/`; read state `src/read-state/`; Vercel entry points `api/` over `src/http/handlers.ts`). All seven units have passed their BUILD_SEQUENCE.md checks: unit 6 via `npx vercel dev`, a real Google sign-in and the Postman collection (`docs/vibemail-api.postman_collection.json`); unit 7 via the integration suite (`tests/integration/`) against the live Supabase dev database. Remaining: merge the `schema` branch and deploy to Vercel. Column names follow the schema branch migrations (`supabase/migrations/` on `origin/schema`), which are live on the dev DB.
+Build progress: units 1–7 are built (provider interface `src/types/provider.ts`; Gmail provider `src/providers/gmail/`; token encryption `src/crypto/`; stores `src/db/`; initial sync `src/sync/`; webhook `src/webhook/`; watch renewal cron `src/cron/renewWatch.ts`; send `src/send/`; read state `src/read-state/`; Vercel entry points `api/` over `src/http/handlers.ts`). All seven units have passed their BUILD_SEQUENCE.md checks: unit 6 via `npx vercel dev`, a real Google sign-in and the Postman collection (`docs/vibemail-api.postman_collection.json`); unit 7 via the integration suite (`tests/integration/`) against the live Supabase dev database. The `schema` branch is merged and `main` is deployed to production (`vibemail-eta.vercel.app`). Column names follow the schema branch migrations (`supabase/migrations/`), which are live on the dev DB.
 
 ## Stack
 
@@ -58,6 +58,7 @@ Do not jump ahead of this ordering: build behind the persistence interface first
 - `/api/v1` base path on all client-facing endpoints.
 - JWT Bearer token authentication on all endpoints except the two OAuth endpoints (`/auth/google`, `/auth/google/callback`), the webhook and the cron.
 - The Pub/Sub webhook endpoint lives at `/webhook/gmail` and the watch-renewal cron at `/api/cron/renew-watch` (scheduled in `vercel.json`), both outside `/api/v1`.
+- `GET /` is a liveness check (`api/health.ts`, via a `vercel.json` rewrite). `vercel.json` sets `outputDirectory: "public"`: only files in `public/` are served statically. Never remove it, or Vercel serves the whole repository root.
 
 ## Architecture
 
