@@ -33,13 +33,22 @@ const VARIABLES = {
   cronSecret: 'CRON_SECRET',
 } as const satisfies Record<keyof AppConfig, string>;
 
-/** @throws Error naming every missing variable. */
+/** A variable's value without the stray spaces, tabs or newlines that copy-paste adds; empty if unset. */
+function clean(env: NodeJS.ProcessEnv, name: string): string {
+  return env[name]?.trim() ?? '';
+}
+
+/**
+ * Values are trimmed: a stray tab on `GOOGLE_REDIRECT_URI` once made Google reject every sign-in.
+ * A value that is only whitespace counts as missing.
+ * @throws Error naming every missing variable.
+ */
 export function readConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const missing = Object.values(VARIABLES).filter((name) => !env[name]);
+  const missing = Object.values(VARIABLES).filter((name) => !clean(env, name));
   if (missing.length > 0) {
     throw new Error(`Missing environment variables: ${missing.join(', ')}`);
   }
-  const value = (key: keyof AppConfig): string => env[VARIABLES[key]] ?? '';
+  const value = (key: keyof AppConfig): string => clean(env, VARIABLES[key]);
   return {
     googleClientId: value('googleClientId'),
     googleClientSecret: value('googleClientSecret'),
