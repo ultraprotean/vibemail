@@ -135,3 +135,7 @@ Two Vercel projects:
 ## Built with
 
 TypeScript, Node.js, the `googleapis` client, Supabase (Postgres), Next.js, React, Jest, Vitest, Vercel, and [Claude Code](https://claude.com/claude-code). Fonts: Pixelify Sans and Nunito (SIL Open Font License).
+
+## License
+
+[ISC](LICENSE), matching the `license` field in `package.json`.
