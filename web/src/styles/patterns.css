@@ -1,0 +1,147 @@
+/* Background patterns live on a fixed layer behind the app.
+ *
+ * The pattern sits on `.backdrop-layer`, which is one tile larger than the screen on every side.
+ * The Backdrop component slides it (the drift) and wraps its offset by exactly one tile, so the
+ * loop is seamless. `--tile` is each pattern's repeat size in pixels; it must match
+ * PATTERN_TILES in src/lib/settings.ts (a test checks). */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(ellipse at 50% -10%, var(--bg-2), transparent 70%);
+}
+
+.backdrop-layer {
+  position: absolute;
+  inset: calc(var(--tile, 0) * -1px);
+  will-change: transform;
+}
+
+html[data-pattern='grain'] {
+  --tile: 240;
+}
+html[data-pattern='gingham'] {
+  --tile: 56;
+}
+html[data-pattern='clouds'] {
+  --tile: 360;
+}
+html[data-pattern='stardust'] {
+  --tile: 320;
+}
+html[data-pattern='none'] {
+  --tile: 0;
+}
+
+/* Paper grain: mottled parchment (large soft blotches over fine speckle). */
+html[data-pattern='grain'] .backdrop-layer {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='c' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.014' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .52  0 0 0 0 .36  0 0 0 0 .2  0 0 0 .55 -.12'/></filter><filter id='f' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .4  0 0 0 0 .28  0 0 0 0 .16  0 0 0 .22 0'/></filter><rect width='100%' height='100%' filter='url(%23c)'/><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+  background-size: 240px 240px;
+}
+
+html[data-theme='moonlit'][data-pattern='grain'] .backdrop-layer {
+  opacity: 0.35;
+}
+
+html[data-pattern='gingham'] .backdrop-layer {
+  background-image: linear-gradient(var(--pattern-ink) 50%, transparent 50%), linear-gradient(90deg, var(--pattern-ink) 50%, transparent 50%);
+  background-size: 56px 56px;
+}
+
+/* Clouds: flat, puffy, Paper-Mario-sky clouds cut out of the tint with a mask. */
+html[data-pattern='clouds'] .backdrop-layer {
+  background: var(--cloud-ink);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360'><defs><g id='c'><rect x='-44' y='0' width='92' height='20' rx='10'/><circle cx='-22' cy='2' r='16'/><circle cx='0' cy='-8' r='22'/><circle cx='24' cy='0' r='17'/></g></defs><g fill='white'><use href='%23c' transform='translate(70 60)'/><use href='%23c' transform='translate(250 112) scale(.7)'/><use href='%23c' transform='translate(160 205) scale(.55)'/><use href='%23c' transform='translate(290 285)'/><use href='%23c' transform='translate(72 312) scale(.8)'/></g></svg>") 0 0 / 360px 360px repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360'><defs><g id='c'><rect x='-44' y='0' width='92' height='20' rx='10'/><circle cx='-22' cy='2' r='16'/><circle cx='0' cy='-8' r='22'/><circle cx='24' cy='0' r='17'/></g></defs><g fill='white'><use href='%23c' transform='translate(70 60)'/><use href='%23c' transform='translate(250 112) scale(.7)'/><use href='%23c' transform='translate(160 205) scale(.55)'/><use href='%23c' transform='translate(290 285)'/><use href='%23c' transform='translate(72 312) scale(.8)'/></g></svg>") 0 0 / 360px 360px repeat;
+}
+
+html[data-pattern='none'] .backdrop-layer {
+  display: none;
+}
+
+/* Star-dust: five groups of stars that wink on different beats (a gentle dip, never a flash). */
+.star {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background-size: 320px 320px;
+  opacity: 0.5;
+  animation: twinkle var(--twinkle-duration, 7s) ease-in-out var(--twinkle-delay, 0s) infinite;
+}
+
+html[data-pattern='stardust'] .star {
+  display: block;
+}
+
+.star-1 {
+  --twinkle-duration: 5.3s;
+  --twinkle-delay: -1s;
+  background-image:
+    radial-gradient(circle at 8% 12%, var(--marker) 0 0.81px, transparent 2.04px),
+    radial-gradient(circle at 47% 31%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 71% 64%, var(--marker) 0 0.99px, transparent 2.18px),
+    radial-gradient(circle at 22% 83%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 93% 49%, var(--marker) 0 0.81px, transparent 2.04px);
+}
+
+.star-2 {
+  --twinkle-duration: 6.7s;
+  --twinkle-delay: -3.4s;
+  background-image:
+    radial-gradient(circle at 16% 44%, var(--marker) 0 0.68px, transparent 1.77px),
+    radial-gradient(circle at 60% 9%, var(--marker) 0 0.93px, transparent 2.11px),
+    radial-gradient(circle at 84% 27%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 38% 71%, var(--marker) 0 0.87px, transparent 2.04px),
+    radial-gradient(circle at 74% 92%, var(--marker) 0 0.68px, transparent 1.77px);
+}
+
+.star-3 {
+  --twinkle-duration: 7.9s;
+  --twinkle-delay: -5.2s;
+  background-image:
+    radial-gradient(circle at 3% 67%, var(--marker) 0 0.87px, transparent 2.04px),
+    radial-gradient(circle at 33% 18%, var(--marker) 0 0.68px, transparent 1.77px),
+    radial-gradient(circle at 54% 52%, var(--marker) 0 1.05px, transparent 2.31px),
+    radial-gradient(circle at 88% 78%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 65% 37%, var(--marker) 0 0.74px, transparent 1.90px);
+}
+
+.star-4 {
+  --twinkle-duration: 9.1s;
+  --twinkle-delay: -2.2s;
+  background-image:
+    radial-gradient(circle at 26% 6%, var(--marker) 0 0.81px, transparent 2.04px),
+    radial-gradient(circle at 12% 90%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 79% 15%, var(--marker) 0 0.99px, transparent 2.18px),
+    radial-gradient(circle at 45% 95%, var(--marker) 0 0.68px, transparent 1.77px),
+    radial-gradient(circle at 96% 86%, var(--marker) 0 0.74px, transparent 1.90px);
+}
+
+.star-5 {
+  --twinkle-duration: 11.3s;
+  --twinkle-delay: -7.5s;
+  background-image:
+    radial-gradient(circle at 57% 73%, var(--marker) 0 0.93px, transparent 2.11px),
+    radial-gradient(circle at 20% 60%, var(--marker) 0 0.62px, transparent 1.63px),
+    radial-gradient(circle at 68% 22%, var(--marker) 0 0.81px, transparent 2.04px),
+    radial-gradient(circle at 41% 43%, var(--marker) 0 0.68px, transparent 1.77px),
+    radial-gradient(circle at 6% 34%, var(--marker) 0 0.87px, transparent 2.04px);
+}
+
+@keyframes twinkle {
+  0%,
+  42%,
+  100% {
+    opacity: 0.5;
+  }
+  58% {
+    opacity: 0.1;
+  }
+  74% {
+    opacity: 0.5;
+  }
+}

@@ -1,0 +1,18 @@
+:root {
+  --font-display: 'Pixelify Sans Variable', 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
+  --font-body: 'Nunito Variable', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --font-scale: 1;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-lg: 22px;
+  --border-w: 3px;
+  --touch: 44px;
+  --content-w: 780px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  font-size: calc(16px * var(--font-scale));
+  -webkit-text-size-adjust: 100%;
+}

@@ -1,0 +1,89 @@
+/* Three themes. Colour supports the UX; every text pair below keeps at least 4.5:1. */
+
+:root,
+html[data-theme='hearthside'] {
+  color-scheme: light;
+  --bg: #f3e4c6;
+  --bg-2: #ead3a6;
+  --surface: #fff6e0;
+  --surface-top: #fffaf0;
+  --surface-2: #f7e6c3;
+  --surface-unread: #ffffff;
+  --surface-unread-top: #ffffff;
+  --ink: #3a2814;
+  --ink-soft: #5f4326;
+  --ink-faint: #7a5d3d;
+  --border: #7a4f24;
+  --border-soft: #d3b27c;
+  --rim: #fffdf5;
+  --accent: #a9560f;
+  --accent-ink: #fff8e8;
+  --highlight: #e9a43a;
+  --marker: #c0620f;
+  --mark-ink: #3a2814;
+  --danger: #a63a28;
+  --focus: #1f5fa8;
+  --shadow-edge: #b88a52;
+  --shadow-color: rgba(92, 56, 20, 0.28);
+  --scrim: rgba(40, 22, 4, 0.4);
+  --pattern-ink: rgba(122, 79, 36, 0.1);
+  --cloud-ink: rgba(255, 255, 255, 0.55);
+}
+
+html[data-theme='moonlit'] {
+  color-scheme: dark;
+  --bg: #0a0f2e;
+  --bg-2: #141d5a;
+  --surface: #121b66;
+  --surface-top: #2538a8;
+  --surface-2: #0e1650;
+  --surface-unread: #1d2c93;
+  --surface-unread-top: #3144c6;
+  --ink: #f2f4ff;
+  --ink-soft: #c9d0f7;
+  --ink-faint: #a3aee6;
+  --border: #dfe5ff;
+  --border-soft: #5a6ad0;
+  --rim: #7f90f2;
+  --accent: #ffd36b;
+  --accent-ink: #1a1f4d;
+  --highlight: #ffd36b;
+  --marker: #ffd36b;
+  --mark-ink: #1a1f4d;
+  --danger: #ffa395;
+  --focus: #ffd36b;
+  --shadow-edge: #05082a;
+  --shadow-color: rgba(0, 0, 12, 0.6);
+  --scrim: rgba(2, 4, 24, 0.6);
+  --pattern-ink: rgba(180, 195, 255, 0.1);
+  --cloud-ink: rgba(150, 170, 255, 0.13);
+}
+
+html[data-theme='meadow'] {
+  color-scheme: light;
+  --bg: #e4efd2;
+  --bg-2: #d3e6b8;
+  --surface: #fbfff2;
+  --surface-top: #ffffff;
+  --surface-2: #eaf5d6;
+  --surface-unread: #ffffff;
+  --surface-unread-top: #ffffff;
+  --ink: #22331c;
+  --ink-soft: #3f5a35;
+  --ink-faint: #54704a;
+  --border: #3d6b34;
+  --border-soft: #b2d194;
+  --rim: #ffffff;
+  --accent: #2f7a4a;
+  --accent-ink: #f7fff2;
+  --highlight: #f08aa6;
+  --marker: #d4517a;
+  --mark-ink: #22331c;
+  --danger: #b3382f;
+  --focus: #1f5fa8;
+  --shadow-edge: #7fa86a;
+  --shadow-color: rgba(40, 80, 30, 0.25);
+  --scrim: rgba(20, 40, 12, 0.4);
+  --pattern-ink: rgba(61, 107, 52, 0.1);
+  --cloud-ink: rgba(255, 255, 255, 0.6);
+}

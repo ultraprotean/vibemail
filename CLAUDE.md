@@ -90,3 +90,25 @@ npx vercel dev
 ```
 
 Environment variables are listed (unset) in `.env.example`; copy to `.env` for local development. Required: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `CRON_SECRET`.
+
+## Frontend (`web/`)
+
+"VibeMail Cozy": a self-contained Next.js 16 / React 19 / strict-TypeScript app (cozy JRPG look: Chrono Trigger, FFVI, Paper Mario). It is a separate project with its own `package.json`; it never imports from `src/` or `api/`, and the root `tsconfig.json` and Jest config do not see it. It talks to the API cross-origin using only the endpoints and fields in CONTRACT.md §6 (no thread, draft, search, label or attachment endpoints exist, so those features are client-side or disabled). Behaviour is specified in `docs/DESIGN_SPEC.md`; the visual system in `docs/design-system/VIBEMAIL_COZY_DESIGN.md`.
+
+```bash
+cd web
+npm install
+npm run dev        # http://localhost:3001 (matches FRONTEND_URL in .env.example)
+npm run typecheck
+npm test           # Vitest, no network or API needed
+npm run build
+```
+
+- The landing page (`/`) has two launch buttons: "Sign in with Google" (real Gmail through the API) and "Try the sample inbox" (built-in pretend mail, no API, a "Sample" badge in the top bar). The choice is made at runtime and remembered in localStorage (`vibemail.mode`); there is no build-time switch. `NEXT_PUBLIC_API_URL` is the only environment variable (default `http://localhost:3000`, which is where `npx vercel dev` serves the API).
+- In the sample inbox, URL flags simulate states: `?mockFail=<ERROR_CODE|AUTH_FAILED_FATAL|NETWORK>` (optionally `&mockOp=list|send|read`), `?mockEmpty=1`, `?mockSlow=<ms>`.
+- Settings (gear icon): "Surprise me" (a random theme, pattern and drift direction, speed and spin each visit, remembered per browser tab; on for first-time visitors; picking any part of the look yourself turns it off and keeps the rest of what was on screen), theme, background pattern (paper grain, gingham, drifting clouds, twinkling star-dust, plain), background drift (on/off, a compass of 8 directions plus a big circle, speed 1 to 10; defaults on, down and to the right, slow), gentle animation, load images in HTML mail (on by default), text size. Drift needs gentle animation on, no reduced-motion preference, and a pattern other than Plain.
+- Background drift is driven by `src/lib/drift.ts` (a velocity-easing loop run by `components/Backdrop.tsx`), not a CSS animation, so speed and direction changes glide. `PATTERN_TILES` in `src/lib/settings.ts` must match the `--tile` values in `src/styles/patterns.css`; the pre-paint script `NO_FLASH_SCRIPT` must stay equivalent to `applySettings` (tests cover both).
+- Message bodies: HTML is the default view when `bodyHtml` exists, Plain only when it doesn't. HTML runs in a sandboxed iframe with no scripts; its CSP allows only `data:` and (by default) `https:` images, and sends no referrer. `cid:` inline attachments cannot display (attachments are out of scope).
+- Sign-in navigates to `GET /api/v1/auth/google`; the API redirects to `<FRONTEND_URL>/inbox#token=<jwt>`, which `AuthProvider` captures and strips from the URL. The API only allows browser calls from its `FRONTEND_URL`, so that env var must equal the frontend's origin (the deployed API currently has a placeholder).
+- Never send or read names that are not in CONTRACT.md (`labelIds`, `status`, `isStarred`, `draftId`, `bodyPlain`). Drafts are localStorage only.
+- Known limitation: the API does not expose a message's RFC Message-ID, so replies send `threadId` and a `Re:` subject without `In-Reply-To`; Gmail may not thread them until the contract exposes that header.
