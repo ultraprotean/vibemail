@@ -82,7 +82,7 @@ You need Node 24, a Google Cloud project, and a Supabase project. To explore the
 4. **Set up Google Cloud.**
    - Create an OAuth client with the redirect URI `http://localhost:3000/api/v1/auth/google/callback`, the scopes `gmail.modify`, `openid` and `email`, and your Google account as a test user.
    - For push sync, create a Pub/Sub topic, allow `gmail-api-push@system.gserviceaccount.com` to publish to it, and add a push subscription pointing at your API's `/webhook/gmail?token=<GOOGLE_PUBSUB_VERIFICATION_TOKEN>`. Pub/Sub cannot reach `localhost`, so locally the first sync and sending work but live updates need a tunnel or a deployed API.
-5. **Start the API.** `npx vercel dev` (serves http://localhost:3000). Note: the `dev` script in `package.json` is stale; use `vercel dev`.
+5. **Start the API.** `npm run dev` (it runs `vercel dev` and serves http://localhost:3000). The first run asks you to log in to Vercel and link a project.
 6. **Start the front end.** `cd web && npm run dev` (serves http://localhost:3001, which must match `FRONTEND_URL`).
 
 ### Environment variables
